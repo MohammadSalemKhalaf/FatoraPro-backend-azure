@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Fatora.API/Fatora.API.csproj" />
+  <Project Path="Fatora.DAL/Fatora.DAL.csproj" />
+</Solution>
