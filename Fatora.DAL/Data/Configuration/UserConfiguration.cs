@@ -19,7 +19,7 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(x => x.Street).IsRequired();
         builder.Property(x => x.BusinessName).IsRequired(false);
 
-        
+        builder.Property(x=>x.Role).HasConversion<string>();
         
     }
 }
