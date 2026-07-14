@@ -20,6 +20,7 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(x => x.BusinessName).IsRequired(false);
 
         builder.Property(x=>x.Role).HasConversion<string>();
+        builder.HasIndex(x=>x.UserName).IsUnique();
         
     }
 }
