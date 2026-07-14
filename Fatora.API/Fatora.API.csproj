@@ -15,7 +15,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Fatora.DAL\Fatora.DAL.csproj" />
+    <ProjectReference Include="..\Fatora.BL\Fatora.BL.csproj" />
   </ItemGroup>
 
 </Project>

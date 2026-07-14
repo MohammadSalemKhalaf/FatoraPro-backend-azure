@@ -1,0 +1,19 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <Compile Remove="Services\Implementation\**" />
+    <EmbeddedResource Remove="Services\Implementation\**" />
+    <None Remove="Services\Implementation\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Fatora.DAL\Fatora.DAL.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>
