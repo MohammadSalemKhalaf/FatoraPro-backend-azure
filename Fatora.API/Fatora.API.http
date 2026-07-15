@@ -1,5 +1,6 @@
 @baseUrl = http://localhost:5050
 @adminToken = PASTE_ADMIN_ACCESS_TOKEN_HERE
+@refreshToken = PASTE_REFRESH_TOKEN_HERE
 
 ### 1) Login as Admin
 POST {{baseUrl}}/api/account/login
@@ -33,4 +34,13 @@ content-Type: application/json
 {
   "UserName":"newrep",
   "Password":"Password123"
+}
+
+### 4) Use a refresh token to get a new access token (rotates the refresh token too)
+# Paste the "refreshToken" from any login response above into @refreshToken.
+POST {{baseUrl}}/api/account/refresh-token
+content-Type: application/json
+
+{
+  "RefreshToken":"{{refreshToken}}"
 }

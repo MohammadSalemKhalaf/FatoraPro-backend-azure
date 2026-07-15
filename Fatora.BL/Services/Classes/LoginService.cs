@@ -22,6 +22,6 @@ public class LoginService(AppDbContext dbContext, IPasswordHasherService passwor
             return null;
         }
 
-        return jwtTokenProvider.GenerateToken(user);
+        return await jwtTokenProvider.GenerateToken(user);
     }
 }
