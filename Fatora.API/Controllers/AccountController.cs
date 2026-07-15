@@ -7,12 +7,18 @@ namespace Fatora.API.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-public class AccountController(IJwtTokenProviderService jwtToken) : ControllerBase
+public class AccountController(ILoginService loginService) : ControllerBase
 {
     [HttpPost("login")]
     public async Task<IActionResult> login(LoginRequest request)
     {
-        var res = await jwtToken.GenerateToken(request);
+        var res = await loginService.Login(request);
+
+        if (res is null)
+        {
+            return Unauthorized(new { message = "Invalid username or password" });
+        }
+
         return Ok(res);
     }
 

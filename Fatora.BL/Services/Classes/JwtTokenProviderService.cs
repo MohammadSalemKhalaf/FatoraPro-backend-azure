@@ -1,10 +1,8 @@
-﻿using Fatora.BL.DTOs.Requests;
-using Fatora.BL.DTOs.Responses;
+﻿using Fatora.BL.DTOs.Responses;
 using Fatora.BL.Services.Abstractions;
-using Fatora.DAL.Data;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
+using Fatora.DAL.Entities;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.Extensions.Configuration;
 using System;
 using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
@@ -13,9 +11,9 @@ using System.Text;
 
 namespace Fatora.BL.Services.Classes;
 
-public class JwtTokenProviderService(IConfiguration configuration, AppDbContext dbContext) : IJwtTokenProviderService
+public class JwtTokenProviderService(IConfiguration configuration) : IJwtTokenProviderService
 {
-    public async  Task<JwtTokenResponse> GenerateToken(LoginRequest request)
+    public JwtTokenResponse GenerateToken(User user)
     {
         var jwtSettings = configuration.GetSection("JwtSettings");
 
@@ -24,20 +22,6 @@ public class JwtTokenProviderService(IConfiguration configuration, AppDbContext 
         var key = jwtSettings["SecretKey"];
         var expiry = DateTime.UtcNow.AddMinutes(int.Parse(jwtSettings["TokenExpirationInMinutes"]!));
 
-        var user = await dbContext.Users.FirstOrDefaultAsync(u=>u.UserName.Equals(request.UserName));
-
-        if(user is null)
-        {
-            throw new Exception("User was not found");
-        }
-
-        if (!request.Password.Equals(user.Password))
-        {
-            throw new Exception("User password didn't match");
-        }
-
-
-        //
         var claims = new List<Claim>()
         {
            new Claim(JwtRegisteredClaimNames.Sub,user.Id.ToString()),
@@ -56,7 +40,6 @@ public class JwtTokenProviderService(IConfiguration configuration, AppDbContext 
                 )
         };
 
-
         var tokenHandler = new JwtSecurityTokenHandler();
         var securityToken = tokenHandler.CreateToken(descriptor);
 
@@ -66,6 +49,5 @@ public class JwtTokenProviderService(IConfiguration configuration, AppDbContext 
             RefreshToken="4asdas-asdasd6-asdasd13",
             Expires=expiry
         };
-
     }
 }

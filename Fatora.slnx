@@ -1,4 +1,8 @@
 <Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="CLAUDE.md" />
+  </Folder>
+  <Folder Name="/Solution Items/ui-reference/" />
   <Project Path="Fatora.API/Fatora.API.csproj" />
   <Project Path="Fatora.BL/Fatora.BL.csproj" />
   <Project Path="Fatora.DAL/Fatora.DAL.csproj" />

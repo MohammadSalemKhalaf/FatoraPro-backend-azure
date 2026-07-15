@@ -1,4 +1,5 @@
-﻿using Fatora.DAL.Data;
+using Fatora.BL.Services.Abstractions;
+using Fatora.DAL.Data;
 using Fatora.DAL.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -6,13 +7,14 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Fatora.DAL.Utils;
+namespace Fatora.BL.Utils;
 
 public static class SeedData
 {
     public static async Task seedAuthDataAysnc(IServiceProvider serviceProvider)
     {
         var dbcontext = serviceProvider.GetService<AppDbContext>();
+        var passwordHasher = serviceProvider.GetRequiredService<IPasswordHasherService>();
 
 
         if (!( await dbcontext.Users.AnyAsync()))
@@ -21,7 +23,7 @@ public static class SeedData
     {
         new User
         {
-      
+
             UserName = "admin",
             Password = "Admin123",
             Name = "System Administrator",
@@ -34,7 +36,7 @@ public static class SeedData
 
         new User
         {
-        
+
             UserName = "ahmad",
             Password = "Password123",
             Name = "Ahmad Ali",
@@ -47,7 +49,7 @@ public static class SeedData
 
         new User
         {
-      
+
             UserName = "mohammad",
             Password = "Password123",
             Name = "Mohammad Hassan",
@@ -60,7 +62,7 @@ public static class SeedData
 
         new User
         {
-      
+
             UserName = "sara",
             Password = "Password123",
             Name = "Sara Khaled",
@@ -73,7 +75,7 @@ public static class SeedData
 
         new User
         {
-       
+
             UserName = "omar",
             Password = "Password123",
             Name = "Omar Saleh",
@@ -86,7 +88,7 @@ public static class SeedData
 
         new User
         {
-       
+
             UserName = "lina",
             Password = "Password123",
             Name = "Lina Ahmad",
@@ -99,7 +101,7 @@ public static class SeedData
 
         new User
         {
-       
+
             UserName = "yousef",
             Password = "Password123",
             Name = "Yousef Mahmoud",
@@ -112,7 +114,7 @@ public static class SeedData
 
         new User
         {
-        
+
             UserName = "reem",
             Password = "Password123",
             Name = "Reem Nasser",
@@ -124,6 +126,10 @@ public static class SeedData
         }
            };// end of users
 
+            foreach (var user in users)
+            {
+                user.Password = passwordHasher.Hash(user, user.Password);
+            }
 
             await dbcontext.Users.AddRangeAsync(users);
             await dbcontext.SaveChangesAsync();

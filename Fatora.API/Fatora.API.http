@@ -1,11 +1,36 @@
 @baseUrl = http://localhost:5050
+@adminToken = PASTE_ADMIN_ACCESS_TOKEN_HERE
 
-
-###
+### 1) Login as Admin
 POST {{baseUrl}}/api/account/login
 content-Type: application/json
 
 {
   "UserName":"admin",
   "Password":"Admin123"
+}
+
+### 2) Admin creates a new Sales Rep account
+# Paste the "accessToken" from step 1's response into the @adminToken variable above first.
+POST {{baseUrl}}/api/users/sales-reps
+content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+  "UserName":"newrep",
+  "Password":"Password123",
+  "Name":"New Rep",
+  "PhoneNumber":"0799000099",
+  "BusinessName":"New Store",
+  "City":"Amman",
+  "Street":"Rainbow Street"
+}
+
+### 3) Sales Rep logs in directly with the username/password the Admin just set
+POST {{baseUrl}}/api/account/login
+content-Type: application/json
+
+{
+  "UserName":"newrep",
+  "Password":"Password123"
 }

@@ -1,8 +1,8 @@
 
 using Fatora.BL.Services.Abstractions;
 using Fatora.BL.Services.Classes;
+using Fatora.BL.Utils;
 using Fatora.DAL.Data;
-using Fatora.DAL.Utils;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -15,6 +15,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddOpenApi();
 
 builder.Services.AddScoped<IJwtTokenProviderService, JwtTokenProviderService>();
+builder.Services.AddScoped<IPasswordHasherService, PasswordHasherService>();
+builder.Services.AddScoped<ILoginService, LoginService>();
+builder.Services.AddScoped<IUserService, UserService>();
 
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
@@ -41,6 +44,7 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
+builder.Services.AddAuthorization();
 
 builder.Services.AddControllers();
 
