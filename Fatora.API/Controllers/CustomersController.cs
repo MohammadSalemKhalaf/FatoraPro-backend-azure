@@ -10,61 +10,61 @@ namespace Fatora.API.Controllers;
 [Route("api/[controller]")]
 [ApiController]
 [Authorize(Roles = "SalesRep")]
-public class ProductsController(IProductService productService) : ControllerBase
+public class CustomersController(ICustomerService customerService) : ControllerBase
 {
     [HttpPost]
-    public async Task<IActionResult> Create(CreateProductRequest request)
+    public async Task<IActionResult> Create(CreateCustomerRequest request)
     {
-        var result = await productService.CreateAsync(User.GetUserId(), request);
+        var result = await customerService.CreateAsync(User.GetUserId(), request);
         return StatusCode(StatusCodes.Status201Created, result);
     }
 
     [HttpGet]
     public async Task<IActionResult> GetAll()
     {
-        var result = await productService.GetAllAsync(User.GetUserId());
+        var result = await customerService.GetAllAsync(User.GetUserId());
         return Ok(result);
     }
 
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id)
     {
-        var result = await productService.GetByIdAsync(User.GetUserId(), id);
+        var result = await customerService.GetByIdAsync(User.GetUserId(), id);
         return result is null ? NotFound() : Ok(result);
     }
 
     [HttpPut("{id:int}")]
-    public async Task<IActionResult> Update(int id, UpdateProductRequest request)
+    public async Task<IActionResult> Update(int id, UpdateCustomerRequest request)
     {
-        var result = await productService.UpdateAsync(User.GetUserId(), id, request);
+        var result = await customerService.UpdateAsync(User.GetUserId(), id, request);
         return result is null ? NotFound() : Ok(result);
     }
 
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {
-        var deleted = await productService.DeleteAsync(User.GetUserId(), id);
+        var deleted = await customerService.DeleteAsync(User.GetUserId(), id);
         return deleted ? NoContent() : NotFound();
     }
 
     [HttpGet("archived")]
     public async Task<IActionResult> GetArchived()
     {
-        var result = await productService.GetArchivedAsync(User.GetUserId());
+        var result = await customerService.GetArchivedAsync(User.GetUserId());
         return Ok(result);
     }
 
     [HttpPost("{id:int}/restore")]
     public async Task<IActionResult> Restore(int id)
     {
-        var result = await productService.RestoreAsync(User.GetUserId(), id);
+        var result = await customerService.RestoreAsync(User.GetUserId(), id);
         return result is null ? NotFound() : Ok(result);
     }
 
     [HttpDelete("{id:int}/permanent")]
     public async Task<IActionResult> PermanentDelete(int id)
     {
-        var deleted = await productService.PermanentDeleteAsync(User.GetUserId(), id);
+        var deleted = await customerService.PermanentDeleteAsync(User.GetUserId(), id);
         return deleted ? NoContent() : NotFound();
     }
 }

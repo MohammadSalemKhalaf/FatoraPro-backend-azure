@@ -1,7 +1,7 @@
 @baseUrl = http://localhost:5050
-@adminToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5MGIwZjM0ZS1hMGEzLTRjZmMtYmY3Mi1jYjM3ZjA5YzkyNmUiLCJyb2xlIjoiQWRtaW4iLCJuYmYiOjE3ODQxMjYyMDcsImV4cCI6MTc4NDEyNjgwNywiaWF0IjoxNzg0MTI2MjA3LCJpc3MiOiJsb2NhbGhvc3QiLCJhdWQiOiJsb2NhbGhvc3QifQ.rO3a5gPp4WdEtJ1zfhzxmqck_-R5Lz79JqwwOclVT6k
+@adminToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5MGIwZjM0ZS1hMGEzLTRjZmMtYmY3Mi1jYjM3ZjA5YzkyNmUiLCJyb2xlIjoiQWRtaW4iLCJuYmYiOjE3ODQxMjcxNDIsImV4cCI6MTc4NDEyNzc0MiwiaWF0IjoxNzg0MTI3MTQyLCJpc3MiOiJsb2NhbGhvc3QiLCJhdWQiOiJsb2NhbGhvc3QifQ.MmWe3yGUHvLdfrFG5fk4rwwnmv3EfwhQm6P39tvx4hE
 @refreshToken = PASTE_REFRESH_TOKEN_HERE
-@salesRepToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyYTM2MTExNC1hYWI5LTQzYjgtODQ2Mi1hMzlhNjhhMzViZjEiLCJyb2xlIjoiU2FsZXNSZXAiLCJuYmYiOjE3ODQxMjYyNzAsImV4cCI6MTc4NDEyNjg3MCwiaWF0IjoxNzg0MTI2MjcwLCJpc3MiOiJsb2NhbGhvc3QiLCJhdWQiOiJsb2NhbGhvc3QifQ.vLSj8tXjvthDf0soCr3p1s0wNTgC1hvAd2dTuJnYuzM
+@salesRepToken =eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyYTM2MTExNC1hYWI5LTQzYjgtODQ2Mi1hMzlhNjhhMzViZjEiLCJyb2xlIjoiU2FsZXNSZXAiLCJuYmYiOjE3ODQxMjcxNzAsImV4cCI6MTc4NDEyNzc3MCwiaWF0IjoxNzg0MTI3MTcwLCJpc3MiOiJsb2NhbGhvc3QiLCJhdWQiOiJsb2NhbGhvc3QifQ.OCJBFDWz56egodvEanBU8scHkY2XUCHVddl5Tu4OPDU
 ### 1) Login as Admin
 POST {{baseUrl}}/api/account/login
 content-Type: application/json
@@ -62,11 +62,11 @@ GET {{baseUrl}}/api/products
 Authorization: Bearer {{salesRepToken}}
 
 ### 7) Sales Rep gets a single product by id
-GET {{baseUrl}}/api/products/1
+GET {{baseUrl}}/api/products/3
 Authorization: Bearer {{salesRepToken}}
 
 ### 8) Sales Rep updates a product
-PUT {{baseUrl}}/api/products/1
+PUT {{baseUrl}}/api/products/3
 content-Type: application/json
 Authorization: Bearer {{salesRepToken}}
 
@@ -77,5 +77,67 @@ Authorization: Bearer {{salesRepToken}}
 }
 
 ### 9) Sales Rep deletes (soft-deletes) a product
-DELETE {{baseUrl}}/api/products/1
+DELETE {{baseUrl}}/api/products/2
+Authorization: Bearer {{salesRepToken}}
+
+### 10) Sales Rep creates a customer
+POST {{baseUrl}}/api/customers
+content-Type: application/json
+Authorization: Bearer {{salesRepToken}}
+
+{
+  "Name":"Abu Khalil",
+  "StoreName":"Khalil Shop",
+  "PhoneNumber":"0791112233",
+  "Street":"Main St",
+  "City":"Amman"
+}
+
+### 11) Sales Rep lists their own customers
+GET {{baseUrl}}/api/customers
+Authorization: Bearer {{salesRepToken}}
+
+### 12) Sales Rep gets a single customer by id
+GET {{baseUrl}}/api/customers/1
+Authorization: Bearer {{salesRepToken}}
+
+### 13) Sales Rep updates a customer
+PUT {{baseUrl}}/api/customers/1
+content-Type: application/json
+Authorization: Bearer {{salesRepToken}}
+
+{
+  "Name":"Abu Khalil",
+  "StoreName":"Khalil Shop 2",
+  "PhoneNumber":"0791112233",
+  "Street":"New St",
+  "City":"Amman"
+}
+
+### 14) Sales Rep deletes (soft-deletes) a customer
+DELETE {{baseUrl}}/api/customers/1
+Authorization: Bearer {{salesRepToken}}
+
+### 15) List archived (soft-deleted) products
+GET {{baseUrl}}/api/products/archived
+Authorization: Bearer {{salesRepToken}}
+
+### 16) Restore an archived product
+POST {{baseUrl}}/api/products/1/restore
+Authorization: Bearer {{salesRepToken}}
+
+### 17) Permanently delete a product (irreversible)
+DELETE {{baseUrl}}/api/products/1/permanent
+Authorization: Bearer {{salesRepToken}}
+
+### 18) List archived (soft-deleted) customers
+GET {{baseUrl}}/api/customers/archived
+Authorization: Bearer {{salesRepToken}}
+
+### 19) Restore an archived customer
+POST {{baseUrl}}/api/customers/1/restore
+Authorization: Bearer {{salesRepToken}}
+
+### 20) Permanently delete a customer (irreversible)
+DELETE {{baseUrl}}/api/customers/1/permanent
 Authorization: Bearer {{salesRepToken}}

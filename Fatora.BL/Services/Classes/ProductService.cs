@@ -73,8 +73,50 @@ public class ProductService(AppDbContext dbContext) : IProductService
         return true;
     }
 
+    public async Task<List<ProductResponse>> GetArchivedAsync(Guid userId)
+    {
+        var products = await dbContext.Products
+            .Where(p => p.UserId == userId && !p.IsActive)
+            .ToListAsync();
+
+        return products.Select(ToResponse).ToList();
+    }
+
+    public async Task<ProductResponse?> RestoreAsync(Guid userId, int id)
+    {
+        var product = await FindOwnedProduct(userId, id);
+
+        if (product is null)
+        {
+            return null;
+        }
+
+        product.IsActive = true;
+        await dbContext.SaveChangesAsync();
+
+        return ToResponse(product);
+    }
+
+    public async Task<bool> PermanentDeleteAsync(Guid userId, int id)
+    {
+        var product = await FindOwnedProduct(userId, id);
+
+        if (product is null)
+        {
+            return false;
+        }
+
+        dbContext.Products.Remove(product);
+        await dbContext.SaveChangesAsync();
+
+        return true;
+    }
+
     private async Task<Product?> FindOwnedActiveProduct(Guid userId, int id) =>
         await dbContext.Products.FirstOrDefaultAsync(p => p.Id == id && p.UserId == userId && p.IsActive);
+
+    private async Task<Product?> FindOwnedProduct(Guid userId, int id) =>
+        await dbContext.Products.FirstOrDefaultAsync(p => p.Id == id && p.UserId == userId);
 
     private static ProductResponse ToResponse(Product product) => new()
     {
