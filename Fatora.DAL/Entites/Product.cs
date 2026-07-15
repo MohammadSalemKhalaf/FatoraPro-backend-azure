@@ -11,6 +11,7 @@ public class Product
     public required string Name { get; set; }
     public decimal PurchasePrice { get; set; }
     public decimal SellPrice { get; set; }
+    public bool IsActive { get; set; } = true;
 
     public Guid UserId { get; set; }
     public User User { get; set; }
