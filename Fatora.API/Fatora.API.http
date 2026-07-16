@@ -210,3 +210,15 @@ Authorization: Bearer {{salesRepToken}}
 ### 29) Dashboard summary (period-filtered: Week, Month, Year, or All)
 GET {{baseUrl}}/api/orders/summary?period=Month
 Authorization: Bearer {{salesRepToken}}
+
+### 30) Sales report (time-bucketed)
+GET {{baseUrl}}/api/reports/sales?period=Week
+Authorization: Bearer {{salesRepToken}}
+
+### 31) Items report (Most sold or Top value)
+GET {{baseUrl}}/api/reports/items?period=All&sortBy=MostSold
+Authorization: Bearer {{salesRepToken}}
+
+### 32) Clients report (Most invoices or Top value)
+GET {{baseUrl}}/api/reports/clients?period=All&sortBy=MostInvoices
+Authorization: Bearer {{salesRepToken}}
