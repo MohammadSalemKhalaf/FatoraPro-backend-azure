@@ -81,8 +81,14 @@ if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
+else
+{
+    // Mobile clients (emulator/device) talk to the local dev API over plain
+    // HTTP; the dev HTTPS certificate isn't trusted on-device, so redirecting
+    // to it would break every request. Only enforce HTTPS outside Development.
+    app.UseHttpsRedirection();
+}
 
-app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
