@@ -12,5 +12,7 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
     public void Configure(EntityTypeBuilder<Order> builder)
     {
         builder.Navigation(x => x.OrderItems).AutoInclude();
+        builder.Navigation(x => x.Payments).AutoInclude();
+        builder.HasIndex(x => new { x.UserId, x.InvoiceNumber }).IsUnique();
     }
 }

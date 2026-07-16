@@ -14,6 +14,8 @@ public class ProductService(AppDbContext dbContext) : IProductService
         var product = new Product
         {
             Name = request.Name,
+            Description = request.Description,
+            ImageUrl = request.ImageUrl,
             PurchasePrice = request.PurchasePrice,
             SellPrice = request.SellPrice,
             UserId = userId
@@ -50,6 +52,8 @@ public class ProductService(AppDbContext dbContext) : IProductService
         }
 
         product.Name = request.Name;
+        product.Description = request.Description;
+        product.ImageUrl = request.ImageUrl;
         product.PurchasePrice = request.PurchasePrice;
         product.SellPrice = request.SellPrice;
 
@@ -122,6 +126,8 @@ public class ProductService(AppDbContext dbContext) : IProductService
     {
         Id = product.Id,
         Name = product.Name,
+        Description = product.Description,
+        ImageUrl = product.ImageUrl,
         PurchasePrice = product.PurchasePrice,
         SellPrice = product.SellPrice,
         IsActive = product.IsActive

@@ -9,8 +9,9 @@ public class OrderItem
 {
     public int Id { get; set; }
     public int Quantity { get; set; }
+    public decimal UnitPrice { get; set; }
 
-    public decimal TotalPrice  => Product.SellPrice * Quantity;
+    public decimal TotalPrice => UnitPrice * Quantity;
 
     public Guid OrderId { get; set; }
     public Order Order { get; set; }

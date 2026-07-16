@@ -53,6 +53,8 @@ Authorization: Bearer {{salesRepToken}}
 
 {
   "Name":"Phone Case",
+  "Description":"Durable silicone phone case",
+  "ImageUrl":"https://example.com/phone-case.png",
   "PurchasePrice":5,
   "SellPrice":15
 }
@@ -72,6 +74,8 @@ Authorization: Bearer {{salesRepToken}}
 
 {
   "Name":"Phone Case v2",
+  "Description":"Durable silicone phone case, now reinforced",
+  "ImageUrl":"https://example.com/phone-case-v2.png",
   "PurchasePrice":6,
   "SellPrice":18
 }
@@ -140,4 +144,69 @@ Authorization: Bearer {{salesRepToken}}
 
 ### 20) Permanently delete a customer (irreversible)
 DELETE {{baseUrl}}/api/customers/1/permanent
+Authorization: Bearer {{salesRepToken}}
+
+### 21) Sales Rep creates an order (invoice) with line items and a discount
+POST {{baseUrl}}/api/orders
+content-Type: application/json
+Authorization: Bearer {{salesRepToken}}
+
+{
+  "CustomerId":1,
+  "DueDate":"2026-08-01",
+  "Discount":10,
+  "Notes":"Test order",
+  "Items":[
+    {"ProductId":1,"Quantity":2},
+    {"ProductId":2,"Quantity":1}
+  ]
+}
+
+### 22) Sales Rep lists their own orders
+GET {{baseUrl}}/api/orders
+Authorization: Bearer {{salesRepToken}}
+
+### 23) Sales Rep gets a single order by id
+GET {{baseUrl}}/api/orders/00000000-0000-0000-0000-000000000000
+Authorization: Bearer {{salesRepToken}}
+
+### 24) Sales Rep updates an order (replaces line items)
+PUT {{baseUrl}}/api/orders/00000000-0000-0000-0000-000000000000
+content-Type: application/json
+Authorization: Bearer {{salesRepToken}}
+
+{
+  "CustomerId":1,
+  "DueDate":"2026-08-15",
+  "Discount":0,
+  "Notes":"Updated order",
+  "Items":[
+    {"ProductId":1,"Quantity":1}
+  ]
+}
+
+### 25) Add a payment to an order
+POST {{baseUrl}}/api/orders/00000000-0000-0000-0000-000000000000/payments
+content-Type: application/json
+Authorization: Bearer {{salesRepToken}}
+
+{
+  "Amount":30,
+  "Notes":"Cash"
+}
+
+### 26) List payments for an order
+GET {{baseUrl}}/api/orders/00000000-0000-0000-0000-000000000000/payments
+Authorization: Bearer {{salesRepToken}}
+
+### 27) Delete a payment (e.g. entered by mistake)
+DELETE {{baseUrl}}/api/orders/00000000-0000-0000-0000-000000000000/payments/1
+Authorization: Bearer {{salesRepToken}}
+
+### 28) Dashboard summary (all time)
+GET {{baseUrl}}/api/orders/summary
+Authorization: Bearer {{salesRepToken}}
+
+### 29) Dashboard summary (period-filtered: Week, Month, Year, or All)
+GET {{baseUrl}}/api/orders/summary?period=Month
 Authorization: Bearer {{salesRepToken}}
