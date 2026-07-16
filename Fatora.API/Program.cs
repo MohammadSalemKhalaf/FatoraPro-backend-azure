@@ -1,4 +1,6 @@
 
+using Fatora.API.Validators;
+using Fatora.BL.DTOs.Requests;
 using Fatora.BL.Services.Abstractions;
 using Fatora.BL.Services.Classes;
 using Fatora.BL.Utils;
@@ -23,7 +25,8 @@ builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
 builder.Services.AddScoped<IReportService, ReportService>();
-
+builder.Services.AddScoped<LoginRequestValidator>();
+builder.Services.AddScoped<RefreshTokenRequest>();
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"));
