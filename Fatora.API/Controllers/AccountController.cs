@@ -9,36 +9,31 @@ namespace Fatora.API.Controllers;
 [Route("api/[controller]")]
 [ApiController]
 public class AccountController(ILoginService loginService, IJwtTokenProviderService jwtTokenProvider,
-    LoginRequestValidator loginRequestValidator) : ControllerBase
+    LoginRequestValidator loginRequestValidator, RefreshTokenValidator refreshTokenValidator) : ControllerBase
 {
     [HttpPost("login")]
     public async Task<IActionResult> login(LoginRequest request)
     {
         var validationResult = await loginRequestValidator.ValidateAsync(request);
-        if (!validationResult.IsValid) 
+        if (!validationResult.IsValid)
         {
-            return   BadRequest(validationResult.Errors);
+            return BadRequest(validationResult.Errors);
         }
+
         var res = await loginService.Login(request);
-
-        if (res is null)
-        {
-            return Unauthorized(new { message = "Invalid username or password" });
-        }
-
         return Ok(res);
     }
 
     [HttpPost("refresh-token")]
     public async Task<IActionResult> refreshToken(RefreshTokenRequest request)
     {
-        var res = await jwtTokenProvider.RefreshTokenAsync(request.RefreshToken);
-
-        if (res is null)
+        var validationResult = await refreshTokenValidator.ValidateAsync(request);
+        if (!validationResult.IsValid)
         {
-            return Unauthorized(new { message = "Invalid or expired refresh token" });
+            return BadRequest(validationResult.Errors);
         }
 
+        var res = await jwtTokenProvider.RefreshTokenAsync(request.RefreshToken);
         return Ok(res);
     }
 }

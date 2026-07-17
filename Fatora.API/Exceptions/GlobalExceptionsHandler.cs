@@ -12,7 +12,7 @@ public sealed class GlobalExceptionHandler(
         public async ValueTask<bool> TryHandleAsync(
             HttpContext httpContext,
             Exception exception,
-            CancellationToken cancelaltionToken)
+            CancellationToken cancellationToken)
         {
             logger.LogError(exception, "Unhandled exception occured. TraceId: {TraceId}",
                 httpContext.TraceIdentifier);
@@ -48,7 +48,9 @@ public sealed class GlobalExceptionHandler(
             ArgumentException => (StatusCodes.Status400BadRequest, "Invalid argument provided"),
 
             NotFoundException => (StatusCodes.Status404NotFound, "Resource Not Found"),
-            ConflictException => (StatusCodes.Status409Conflict, "Resource Already Exist"),
+            ConflictException => (StatusCodes.Status409Conflict, "Resource Already Exists"),
+            UnauthorizedException => (StatusCodes.Status401Unauthorized, "Unauthorized"),
+            BadRequestException => (StatusCodes.Status400BadRequest, "Invalid Request"),
 
             AppException appException => ((int)appException.StatusCode, "Application Error"),
 
@@ -60,8 +62,11 @@ public sealed class GlobalExceptionHandler(
         private static string GetProblemType(int statusCode) => statusCode switch
         {
             400 => "https://tools.ietf.org/html/rfc9110#section-15.5.1",
+            401 => "https://tools.ietf.org/html/rfc9110#section-15.5.2",
             404 => "https://tools.ietf.org/html/rfc9110#section-15.5.5",
             409 => "https://tools.ietf.org/html/rfc9110#section-15.5.10",
+            500 => "https://tools.ietf.org/html/rfc9110#section-15.6.1",
+            _ => "about:blank"
         };
 
         // Function to get safe error message in production and explicit error message in development

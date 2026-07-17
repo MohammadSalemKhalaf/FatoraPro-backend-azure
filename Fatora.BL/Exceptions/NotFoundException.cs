@@ -11,8 +11,8 @@ public sealed class NotFoundException : AppException
      {
      }
      //For Internal Tracking
-     public NotFoundException(string resourceName, object key) 
-         : base($"{resourceName} with identifier '{key}' already exists.", System.Net.HttpStatusCode.NotFound)
-     { 
+     public NotFoundException(string resourceName, object key)
+         : base($"{resourceName} with identifier '{key}' was not found.", System.Net.HttpStatusCode.NotFound)
+     {
      }
  } 

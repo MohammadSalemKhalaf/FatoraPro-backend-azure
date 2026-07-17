@@ -4,28 +4,26 @@ using Fatora.BL.Exceptions;
 using Fatora.BL.Services.Abstractions;
 using Fatora.DAL.Data;
 using Fatora.DAL.Entites;
-using Fatora.DAL.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace Fatora.BL.Services.Classes;
 
 public class OrderService(AppDbContext dbContext) : IOrderService
 {
-    public async Task<OrderResponse?> CreateAsync(Guid userId, CreateOrderRequest request)
+    public async Task<OrderResponse> CreateAsync(Guid userId, CreateOrderRequest request)
     {
         var customer = await FindOwnedActiveCustomer(userId, request.CustomerId);
 
         if (customer is null)
         {
-            throw new NotFoundException($"Customer with this {userId} was not found");;
+            throw new NotFoundException(nameof(Customer), request.CustomerId);
         }
 
         var productsById = await LoadOwnedActiveProducts(userId, request.Items);
 
         if (productsById is null)
         {
-             throw new NotFoundException($"Products for this user:{userId}  was not found");;
-;
+            throw new NotFoundException("One or more products", string.Join(",", request.Items.Select(i => i.ProductId)));
         }
 
         var order = new Order
@@ -62,37 +60,39 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         return orders.Select(ToResponse).ToList();
     }
 
-    public async Task<OrderResponse?> GetByIdAsync(Guid userId, Guid id)
-    {
-        var order = await FindOwnedOrder(userId, id);
-        return order is null ? throw new NotFoundException($"Customer with this {id} was not found")
- : ToResponse(order);
-    }
-
-    public async Task<OrderResponse?> UpdateAsync(Guid userId, Guid id, UpdateOrderRequest request)
+    public async Task<OrderResponse> GetByIdAsync(Guid userId, Guid id)
     {
         var order = await FindOwnedOrder(userId, id);
 
         if (order is null)
         {
-            throw new NotFoundException($"Order with this {id} was not found");;
-;
+            throw new NotFoundException(nameof(Order), id);
+        }
+
+        return ToResponse(order);
+    }
+
+    public async Task<OrderResponse> UpdateAsync(Guid userId, Guid id, UpdateOrderRequest request)
+    {
+        var order = await FindOwnedOrder(userId, id);
+
+        if (order is null)
+        {
+            throw new NotFoundException(nameof(Order), id);
         }
 
         var customer = await FindOwnedActiveCustomer(userId, request.CustomerId);
 
         if (customer is null)
         {
-            throw new NotFoundException($"Customer with this {id} was not found");
-;
+            throw new NotFoundException(nameof(Customer), request.CustomerId);
         }
 
         var productsById = await LoadOwnedActiveProducts(userId, request.Items);
 
         if (productsById is null)
         {
-            throw new NotFoundException($"product with this {id} was not found");;
-;
+            throw new NotFoundException("One or more products", string.Join(",", request.Items.Select(i => i.ProductId)));
         }
 
         order.CustomerId = customer.Id;
@@ -104,6 +104,7 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         order.OrderItems = request.Items.Select(i => new OrderItem
         {
             ProductId = i.ProductId,
+            Product = productsById[i.ProductId],
             Quantity = i.Quantity,
             UnitPrice = productsById[i.ProductId].SellPrice
         }).ToList();

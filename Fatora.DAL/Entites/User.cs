@@ -20,6 +20,7 @@ public class User
     public required string Name { get; set; }
     public required string  PhoneNumber{ get; set; }
     public string? BusinessName{ get; set; }
+    public string? LogoUrl { get; set; }
     public required string City { get; set; }
     public required string Street { get; set; }
     public Role Role { get; set; }=Role.SalesRep;

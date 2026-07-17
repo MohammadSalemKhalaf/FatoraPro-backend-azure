@@ -483,3 +483,6 @@ CLAUDE.md
 
 # Design reference assets (local only, not shared via git)
 UI-Reference/
+
+# User-uploaded content (runtime data, not source-controlled)
+Fatora.API/wwwroot/uploads/

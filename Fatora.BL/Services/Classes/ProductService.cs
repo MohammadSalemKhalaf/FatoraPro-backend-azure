@@ -1,5 +1,6 @@
 using Fatora.BL.DTOs.Requests;
 using Fatora.BL.DTOs.Responses;
+using Fatora.BL.Exceptions;
 using Fatora.BL.Services.Abstractions;
 using Fatora.DAL.Data;
 using Fatora.DAL.Entites;
@@ -36,19 +37,25 @@ public class ProductService(AppDbContext dbContext) : IProductService
         return products.Select(ToResponse).ToList();
     }
 
-    public async Task<ProductResponse?> GetByIdAsync(Guid userId, int id)
-    {
-        var product = await FindOwnedActiveProduct(userId, id);
-        return product is null ? null : ToResponse(product);
-    }
-
-    public async Task<ProductResponse?> UpdateAsync(Guid userId, int id, UpdateProductRequest request)
+    public async Task<ProductResponse> GetByIdAsync(Guid userId, int id)
     {
         var product = await FindOwnedActiveProduct(userId, id);
 
         if (product is null)
         {
-            return null;
+            throw new NotFoundException(nameof(Product), id);
+        }
+
+        return ToResponse(product);
+    }
+
+    public async Task<ProductResponse> UpdateAsync(Guid userId, int id, UpdateProductRequest request)
+    {
+        var product = await FindOwnedActiveProduct(userId, id);
+
+        if (product is null)
+        {
+            throw new NotFoundException(nameof(Product), id);
         }
 
         product.Name = request.Name;
@@ -62,19 +69,32 @@ public class ProductService(AppDbContext dbContext) : IProductService
         return ToResponse(product);
     }
 
-    public async Task<bool> DeleteAsync(Guid userId, int id)
+    public async Task<ProductResponse> UpdateImageAsync(Guid userId, int id, string imageUrl)
     {
         var product = await FindOwnedActiveProduct(userId, id);
 
         if (product is null)
         {
-            return false;
+            throw new NotFoundException(nameof(Product), id);
+        }
+
+        product.ImageUrl = imageUrl;
+        await dbContext.SaveChangesAsync();
+
+        return ToResponse(product);
+    }
+
+    public async Task DeleteAsync(Guid userId, int id)
+    {
+        var product = await FindOwnedActiveProduct(userId, id);
+
+        if (product is null)
+        {
+            throw new NotFoundException(nameof(Product), id);
         }
 
         product.IsActive = false;
         await dbContext.SaveChangesAsync();
-
-        return true;
     }
 
     public async Task<List<ProductResponse>> GetArchivedAsync(Guid userId)
@@ -86,13 +106,13 @@ public class ProductService(AppDbContext dbContext) : IProductService
         return products.Select(ToResponse).ToList();
     }
 
-    public async Task<ProductResponse?> RestoreAsync(Guid userId, int id)
+    public async Task<ProductResponse> RestoreAsync(Guid userId, int id)
     {
         var product = await FindOwnedProduct(userId, id);
 
         if (product is null)
         {
-            return null;
+            throw new NotFoundException(nameof(Product), id);
         }
 
         product.IsActive = true;
@@ -101,19 +121,17 @@ public class ProductService(AppDbContext dbContext) : IProductService
         return ToResponse(product);
     }
 
-    public async Task<bool> PermanentDeleteAsync(Guid userId, int id)
+    public async Task PermanentDeleteAsync(Guid userId, int id)
     {
         var product = await FindOwnedProduct(userId, id);
 
         if (product is null)
         {
-            return false;
+            throw new NotFoundException(nameof(Product), id);
         }
 
         dbContext.Products.Remove(product);
         await dbContext.SaveChangesAsync();
-
-        return true;
     }
 
     private async Task<Product?> FindOwnedActiveProduct(Guid userId, int id) =>

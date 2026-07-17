@@ -58,7 +58,7 @@ public class JwtTokenProviderService(IConfiguration configuration, AppDbContext 
         };
     }
 
-    public async Task<JwtTokenResponse?> RefreshTokenAsync(string refreshToken)
+    public async Task<JwtTokenResponse> RefreshTokenAsync(string refreshToken)
     {
         var storedToken = await dbContext.RefreshTokens
             .Include(r => r.User)
@@ -66,7 +66,7 @@ public class JwtTokenProviderService(IConfiguration configuration, AppDbContext 
 
         if (storedToken is null || storedToken.ExpiresOnUtc < DateTime.UtcNow)
         {
-            throw new ConflictException("Expired refresh token");
+            throw new UnauthorizedException("Invalid or expired refresh token");
         }
 
         return await GenerateToken(storedToken.User);

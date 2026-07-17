@@ -10,6 +10,12 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 
+// WebApplication.CreateBuilder resolves the WebRootFileProvider from whether wwwroot exists AT THIS
+// EXACT CALL. If it's missing, the provider is permanently a NullFileProvider for the app's lifetime -
+// creating the folder later (even before Build()) is too late. So this must run before CreateBuilder.
+Directory.CreateDirectory(Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "products"));
+Directory.CreateDirectory(Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "logos"));
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
@@ -79,6 +85,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseStaticFiles();
 
 app.UseExceptionHandler();
 app.UseStatusCodePages();
