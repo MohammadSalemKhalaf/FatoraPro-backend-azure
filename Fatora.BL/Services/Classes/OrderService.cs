@@ -1,8 +1,10 @@
 using Fatora.BL.DTOs.Requests;
 using Fatora.BL.DTOs.Responses;
+using Fatora.BL.Exceptions;
 using Fatora.BL.Services.Abstractions;
 using Fatora.DAL.Data;
 using Fatora.DAL.Entites;
+using Fatora.DAL.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace Fatora.BL.Services.Classes;
@@ -15,14 +17,15 @@ public class OrderService(AppDbContext dbContext) : IOrderService
 
         if (customer is null)
         {
-            return null;
+            throw new NotFoundException($"Customer with this {userId} was not found");;
         }
 
         var productsById = await LoadOwnedActiveProducts(userId, request.Items);
 
         if (productsById is null)
         {
-            return null;
+             throw new NotFoundException($"Products for this user:{userId}  was not found");;
+;
         }
 
         var order = new Order
@@ -62,7 +65,8 @@ public class OrderService(AppDbContext dbContext) : IOrderService
     public async Task<OrderResponse?> GetByIdAsync(Guid userId, Guid id)
     {
         var order = await FindOwnedOrder(userId, id);
-        return order is null ? null : ToResponse(order);
+        return order is null ? throw new NotFoundException($"Customer with this {id} was not found")
+ : ToResponse(order);
     }
 
     public async Task<OrderResponse?> UpdateAsync(Guid userId, Guid id, UpdateOrderRequest request)
@@ -71,21 +75,24 @@ public class OrderService(AppDbContext dbContext) : IOrderService
 
         if (order is null)
         {
-            return null;
+            throw new NotFoundException($"Order with this {id} was not found");;
+;
         }
 
         var customer = await FindOwnedActiveCustomer(userId, request.CustomerId);
 
         if (customer is null)
         {
-            return null;
+            throw new NotFoundException($"Customer with this {id} was not found");
+;
         }
 
         var productsById = await LoadOwnedActiveProducts(userId, request.Items);
 
         if (productsById is null)
         {
-            return null;
+            throw new NotFoundException($"product with this {id} was not found");;
+;
         }
 
         order.CustomerId = customer.Id;

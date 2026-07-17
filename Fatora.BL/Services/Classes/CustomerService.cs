@@ -1,5 +1,6 @@
 using Fatora.BL.DTOs.Requests;
 using Fatora.BL.DTOs.Responses;
+using Fatora.BL.Exceptions;
 using Fatora.BL.Services.Abstractions;
 using Fatora.DAL.Data;
 using Fatora.DAL.Entites;
@@ -48,7 +49,7 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
 
         if (customer is null)
         {
-            return null;
+            throw new NotFoundException(request.Name,"");
         }
 
         customer.Name = request.Name;
@@ -68,7 +69,7 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
 
         if (customer is null)
         {
-            return false;
+            throw new NotFoundException($"Customer with this {id} was not found");
         }
 
         customer.IsActive = false;
@@ -92,7 +93,7 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
 
         if (customer is null)
         {
-            return null;
+            throw new NotFoundException($"Customer with this {id} was not found");
         }
 
         customer.IsActive = true;
@@ -107,7 +108,7 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
 
         if (customer is null)
         {
-            return false;
+            throw new NotFoundException($"Customer with this {id} was not found");
         }
 
         dbContext.Customers.Remove(customer);

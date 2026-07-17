@@ -1,5 +1,6 @@
 using Fatora.BL.DTOs.Requests;
 using Fatora.BL.DTOs.Responses;
+using Fatora.BL.Exceptions;
 using Fatora.BL.Services.Abstractions;
 using Fatora.DAL.Data;
 using Microsoft.EntityFrameworkCore;
@@ -14,12 +15,12 @@ public class LoginService(AppDbContext dbContext, IPasswordHasherService passwor
 
         if (user is null)
         {
-            return null;
+            throw new NotFoundException($"User with this {request.UserName} was not found");;
         }
 
         if (!passwordHasher.Verify(user, request.Password, user.Password))
         {
-            return null;
+            throw new NotFoundException($"Wrong password for User ");;
         }
 
         return await jwtTokenProvider.GenerateToken(user);

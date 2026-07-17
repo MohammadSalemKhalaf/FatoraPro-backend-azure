@@ -12,6 +12,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using Fatora.BL.Exceptions;
 
 namespace Fatora.BL.Services.Classes;
 
@@ -65,7 +66,7 @@ public class JwtTokenProviderService(IConfiguration configuration, AppDbContext 
 
         if (storedToken is null || storedToken.ExpiresOnUtc < DateTime.UtcNow)
         {
-            return null;
+            throw new ConflictException("Expired refresh token");
         }
 
         return await GenerateToken(storedToken.User);

@@ -1,11 +1,11 @@
 
-using Fatora.API.Validators;
-using Fatora.BL.DTOs.Requests;
-using Fatora.BL.Services.Abstractions;
-using Fatora.BL.Services.Classes;
+
+using Fatora.API;
+using Fatora.API.Exceptions;
 using Fatora.BL.Utils;
 using Fatora.DAL.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
@@ -15,18 +15,11 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
-builder.Services.AddScoped<IJwtTokenProviderService, JwtTokenProviderService>();
-builder.Services.AddScoped<IPasswordHasherService, PasswordHasherService>();
-builder.Services.AddScoped<ILoginService, LoginService>();
-builder.Services.AddScoped<IUserService, UserService>();
-builder.Services.AddScoped<IProductService, ProductService>();
-builder.Services.AddScoped<ICustomerService, CustomerService>();
-builder.Services.AddScoped<IOrderService, OrderService>();
-builder.Services.AddScoped<IPaymentService, PaymentService>();
-builder.Services.AddScoped<IReportService, ReportService>();
-builder.Services.AddScoped<LoginRequestValidator>();
-builder.Services.AddScoped<RefreshTokenRequest>();
+builder.Services.AddGroupedServices();
+
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"));
@@ -86,9 +79,17 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+app.UseExceptionHandler();
+app.UseStatusCodePages();
+
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
+app.MapGet("/health", () =>
+{
+    return Results.Ok(new {Message="all up"});
+});
 app.Run();
 
