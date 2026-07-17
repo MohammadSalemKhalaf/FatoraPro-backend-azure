@@ -39,6 +39,12 @@ public class UserService(AppDbContext dbContext, IPasswordHasherService password
         return ToResponse(user);
     }
 
+    public async Task<UserResponse> GetProfileAsync(Guid userId)
+    {
+        var user = await FindUser(userId);
+        return ToResponse(user);
+    }
+
     public async Task<string?> GetLogoUrlAsync(Guid userId)
     {
         var user = await FindUser(userId);
@@ -53,6 +59,69 @@ public class UserService(AppDbContext dbContext, IPasswordHasherService password
         await dbContext.SaveChangesAsync();
 
         return ToResponse(user);
+    }
+
+    public async Task<UserResponse> UpdateBankDetailsAsync(Guid userId, UpdateBankDetailsRequest request)
+    {
+        var user = await FindUser(userId);
+
+        user.BankName = request.BankName;
+        user.AccountNumber = request.AccountNumber;
+        user.IBAN = request.IBAN;
+
+        await dbContext.SaveChangesAsync();
+
+        return ToResponse(user);
+    }
+
+    public async Task DeleteAccountAsync(Guid userId, string password)
+    {
+        var user = await FindUser(userId);
+
+        if (!passwordHasher.Verify(user, password, user.Password))
+        {
+            throw new UnauthorizedException("Incorrect password.");
+        }
+
+        dbContext.Users.Remove(user);
+        await dbContext.SaveChangesAsync();
+    }
+
+    public async Task ChangePasswordAsync(Guid userId, string currentPassword, string newPassword)
+    {
+        var user = await FindUser(userId);
+
+        if (!passwordHasher.Verify(user, currentPassword, user.Password))
+        {
+            throw new UnauthorizedException("Current password is incorrect.");
+        }
+
+        user.Password = passwordHasher.Hash(user, newPassword);
+
+        var refreshTokens = await dbContext.RefreshTokens.Where(r => r.UserId == userId).ToListAsync();
+        dbContext.RefreshTokens.RemoveRange(refreshTokens);
+
+        await dbContext.SaveChangesAsync();
+    }
+
+    public async Task SuspendAsync(Guid userId)
+    {
+        var user = await FindUser(userId);
+
+        user.IsActive = false;
+
+        var refreshTokens = await dbContext.RefreshTokens.Where(r => r.UserId == userId).ToListAsync();
+        dbContext.RefreshTokens.RemoveRange(refreshTokens);
+
+        await dbContext.SaveChangesAsync();
+    }
+
+    public async Task ActivateAsync(Guid userId)
+    {
+        var user = await FindUser(userId);
+
+        user.IsActive = true;
+        await dbContext.SaveChangesAsync();
     }
 
     private async Task<User> FindUser(Guid userId)
@@ -77,6 +146,10 @@ public class UserService(AppDbContext dbContext, IPasswordHasherService password
         LogoUrl = user.LogoUrl,
         City = user.City,
         Street = user.Street,
-        Role = user.Role.ToString()
+        Role = user.Role.ToString(),
+        IsActive = user.IsActive,
+        BankName = user.BankName,
+        AccountNumber = user.AccountNumber,
+        IBAN = user.IBAN
     };
 }

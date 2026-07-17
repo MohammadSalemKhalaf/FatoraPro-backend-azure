@@ -6,6 +6,12 @@ using Fatora.BL.DTOs.Responses;
 public interface IUserService
 {
     public Task<UserResponse> CreateSalesRepAsync(CreateSalesRepRequest request);
+    public Task<UserResponse> GetProfileAsync(Guid userId);
     public Task<string?> GetLogoUrlAsync(Guid userId);
     public Task<UserResponse> UpdateLogoAsync(Guid userId, string logoUrl);
+    public Task<UserResponse> UpdateBankDetailsAsync(Guid userId, UpdateBankDetailsRequest request);
+    public Task DeleteAccountAsync(Guid userId, string password);
+    public Task ChangePasswordAsync(Guid userId, string currentPassword, string newPassword);
+    public Task SuspendAsync(Guid userId);
+    public Task ActivateAsync(Guid userId);
 }

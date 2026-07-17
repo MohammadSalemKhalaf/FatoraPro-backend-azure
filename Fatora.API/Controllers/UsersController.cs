@@ -24,4 +24,18 @@ public class UsersController(IUserService userService, CreateSalesRepRequestVali
         var result = await userService.CreateSalesRepAsync(request);
         return StatusCode(StatusCodes.Status201Created, result);
     }
+
+    [HttpPost("{id:guid}/suspend")]
+    public async Task<IActionResult> Suspend(Guid id)
+    {
+        await userService.SuspendAsync(id);
+        return NoContent();
+    }
+
+    [HttpPost("{id:guid}/activate")]
+    public async Task<IActionResult> Activate(Guid id)
+    {
+        await userService.ActivateAsync(id);
+        return NoContent();
+    }
 }

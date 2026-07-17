@@ -11,4 +11,8 @@ public class UserResponse
     public string City { get; set; } = string.Empty;
     public string Street { get; set; } = string.Empty;
     public string Role { get; set; } = string.Empty;
+    public bool IsActive { get; set; }
+    public string? BankName { get; set; }
+    public string? AccountNumber { get; set; }
+    public string? IBAN { get; set; }
 }

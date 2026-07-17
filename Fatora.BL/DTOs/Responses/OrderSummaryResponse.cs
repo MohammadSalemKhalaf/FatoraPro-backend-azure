@@ -9,6 +9,6 @@ public class OrderSummaryResponse
     public decimal TotalOutstanding { get; set; }
     public int PaidCount { get; set; }
     public int PartiallyPaidCount { get; set; }
-    public int UnpaidCount { get; set; }
+    public int SentCount { get; set; }
     public int OverdueCount { get; set; }
 }

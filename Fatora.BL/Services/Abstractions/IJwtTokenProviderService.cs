@@ -7,4 +7,5 @@ public interface IJwtTokenProviderService
 {
     public Task<JwtTokenResponse> GenerateToken(User user);
     public Task<JwtTokenResponse> RefreshTokenAsync(string refreshToken);
+    public Task LogoutAsync(Guid userId);
 }

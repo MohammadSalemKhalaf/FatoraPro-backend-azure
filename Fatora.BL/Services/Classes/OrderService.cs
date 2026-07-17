@@ -146,25 +146,44 @@ public class OrderService(AppDbContext dbContext) : IOrderService
 
         foreach (var order in orders)
         {
-            if (order.RemainingBalance <= 0)
+            switch (ComputeStatus(order, today))
             {
-                summary.PaidCount++;
-            }
-            else if (order.DueDate < today)
-            {
-                summary.OverdueCount++;
-            }
-            else if (order.PaidAmount > 0)
-            {
-                summary.PartiallyPaidCount++;
-            }
-            else
-            {
-                summary.UnpaidCount++;
+                case "Paid":
+                    summary.PaidCount++;
+                    break;
+                case "Overdue":
+                    summary.OverdueCount++;
+                    break;
+                case "PartiallyPaid":
+                    summary.PartiallyPaidCount++;
+                    break;
+                default:
+                    summary.SentCount++;
+                    break;
             }
         }
 
         return summary;
+    }
+
+    private static string ComputeStatus(Order order, DateOnly today)
+    {
+        if (order.RemainingBalance <= 0)
+        {
+            return "Paid";
+        }
+
+        if (order.DueDate < today)
+        {
+            return "Overdue";
+        }
+
+        if (order.PaidAmount > 0)
+        {
+            return "PartiallyPaid";
+        }
+
+        return "Sent";
     }
 
     private async Task<Customer?> FindOwnedActiveCustomer(Guid userId, int customerId) =>
@@ -194,8 +213,12 @@ public class OrderService(AppDbContext dbContext) : IOrderService
     {
         Id = order.Id,
         InvoiceNumber = order.InvoiceNumber,
+        Status = ComputeStatus(order, DateOnly.FromDateTime(DateTime.UtcNow)),
         CustomerId = order.CustomerId,
         CustomerName = order.Customer.Name,
+        CustomerPhoneNumber = order.Customer.PhoneNumber,
+        CustomerStreet = order.Customer.Street,
+        CustomerCity = order.Customer.City,
         CreatedAt = order.CreatedAt,
         DueDate = order.DueDate,
         Discount = order.Discount,

@@ -4,8 +4,12 @@ public class OrderResponse
 {
     public Guid Id { get; set; }
     public string InvoiceNumber { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
     public int CustomerId { get; set; }
     public string CustomerName { get; set; } = string.Empty;
+    public string CustomerPhoneNumber { get; set; } = string.Empty;
+    public string CustomerStreet { get; set; } = string.Empty;
+    public string CustomerCity { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
     public DateOnly DueDate { get; set; }
     public decimal Discount { get; set; }

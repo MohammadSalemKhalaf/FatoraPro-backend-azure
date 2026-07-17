@@ -34,6 +34,8 @@ public static class GroupRegistrations
         Services.AddScoped<UpdateOrderRequestValidator>();
         Services.AddScoped<CreatePaymentRequestValidator>();
         Services.AddScoped<CreateSalesRepRequestValidator>();
+        Services.AddScoped<ChangePasswordRequestValidator>();
+        Services.AddScoped<DeleteAccountRequestValidator>();
 
         return Services;
     }

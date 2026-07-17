@@ -24,6 +24,10 @@ public class User
     public required string City { get; set; }
     public required string Street { get; set; }
     public Role Role { get; set; }=Role.SalesRep;
+    public bool IsActive { get; set; } = true;
+    public string? BankName { get; set; }
+    public string? AccountNumber { get; set; }
+    public string? IBAN { get; set; }
 
 
     public List<Product> Items { get; set; } = new List<Product>();

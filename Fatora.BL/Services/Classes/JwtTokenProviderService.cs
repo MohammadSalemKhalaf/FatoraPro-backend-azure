@@ -72,6 +72,13 @@ public class JwtTokenProviderService(IConfiguration configuration, AppDbContext 
         return await GenerateToken(storedToken.User);
     }
 
+    public async Task LogoutAsync(Guid userId)
+    {
+        var refreshTokens = await dbContext.RefreshTokens.Where(r => r.UserId == userId).ToListAsync();
+        dbContext.RefreshTokens.RemoveRange(refreshTokens);
+        await dbContext.SaveChangesAsync();
+    }
+
     private async Task<RefreshToken> IssueRefreshTokenAsync(User user)
     {
         var existingTokens = await dbContext.RefreshTokens.Where(r => r.UserId == user.Id).ToListAsync();

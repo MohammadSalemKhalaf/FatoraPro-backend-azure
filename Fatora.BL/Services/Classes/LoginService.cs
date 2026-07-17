@@ -20,6 +20,13 @@ public class LoginService(AppDbContext dbContext, IPasswordHasherService passwor
             throw new UnauthorizedException("Invalid username or password");
         }
 
+        // Safe to be specific here - the caller already proved they know valid credentials,
+        // so this doesn't create an enumeration risk like the check above does.
+        if (!user.IsActive)
+        {
+            throw new UnauthorizedException("This account has been suspended.");
+        }
+
         return await jwtTokenProvider.GenerateToken(user);
     }
 }
