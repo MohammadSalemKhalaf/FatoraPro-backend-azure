@@ -7,10 +7,11 @@ public interface IProductService
 {
     Task<ProductResponse> CreateAsync(Guid userId, CreateProductRequest request);
     Task<List<ProductResponse>> GetAllAsync(Guid userId);
-    Task<ProductResponse?> GetByIdAsync(Guid userId, int id);
-    Task<ProductResponse?> UpdateAsync(Guid userId, int id, UpdateProductRequest request);
-    Task<bool> DeleteAsync(Guid userId, int id);
+    Task<ProductResponse> GetByIdAsync(Guid userId, int id);
+    Task<ProductResponse> UpdateAsync(Guid userId, int id, UpdateProductRequest request);
+    Task<ProductResponse> UpdateImageAsync(Guid userId, int id, string imageUrl);
+    Task DeleteAsync(Guid userId, int id);
     Task<List<ProductResponse>> GetArchivedAsync(Guid userId);
-    Task<ProductResponse?> RestoreAsync(Guid userId, int id);
-    Task<bool> PermanentDeleteAsync(Guid userId, int id);
+    Task<ProductResponse> RestoreAsync(Guid userId, int id);
+    Task PermanentDeleteAsync(Guid userId, int id);
 }

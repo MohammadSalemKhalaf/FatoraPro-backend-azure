@@ -1,3 +1,4 @@
+using Fatora.API.Validators.UserValidators;
 using Fatora.BL.DTOs.Requests;
 using Fatora.BL.Services.Abstractions;
 using Microsoft.AspNetCore.Authorization;
@@ -9,18 +10,32 @@ namespace Fatora.API.Controllers;
 [Route("api/[controller]")]
 [ApiController]
 [Authorize(Roles = "Admin")]
-public class UsersController(IUserService userService) : ControllerBase
+public class UsersController(IUserService userService, CreateSalesRepRequestValidator createValidator) : ControllerBase
 {
     [HttpPost("sales-reps")]
     public async Task<IActionResult> CreateSalesRep(CreateSalesRepRequest request)
     {
-        var result = await userService.CreateSalesRepAsync(request);
-
-        if (result is null)
+        var validationResult = await createValidator.ValidateAsync(request);
+        if (!validationResult.IsValid)
         {
-            return Conflict(new { message = "Username already exists" });
+            return BadRequest(validationResult.Errors);
         }
 
+        var result = await userService.CreateSalesRepAsync(request);
         return StatusCode(StatusCodes.Status201Created, result);
+    }
+
+    [HttpPost("{id:guid}/suspend")]
+    public async Task<IActionResult> Suspend(Guid id)
+    {
+        await userService.SuspendAsync(id);
+        return NoContent();
+    }
+
+    [HttpPost("{id:guid}/activate")]
+    public async Task<IActionResult> Activate(Guid id)
+    {
+        await userService.ActivateAsync(id);
+        return NoContent();
     }
 }

@@ -12,6 +12,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using Fatora.BL.Exceptions;
 
 namespace Fatora.BL.Services.Classes;
 
@@ -57,7 +58,7 @@ public class JwtTokenProviderService(IConfiguration configuration, AppDbContext 
         };
     }
 
-    public async Task<JwtTokenResponse?> RefreshTokenAsync(string refreshToken)
+    public async Task<JwtTokenResponse> RefreshTokenAsync(string refreshToken)
     {
         var storedToken = await dbContext.RefreshTokens
             .Include(r => r.User)
@@ -65,10 +66,17 @@ public class JwtTokenProviderService(IConfiguration configuration, AppDbContext 
 
         if (storedToken is null || storedToken.ExpiresOnUtc < DateTime.UtcNow)
         {
-            return null;
+            throw new UnauthorizedException("Invalid or expired refresh token");
         }
 
         return await GenerateToken(storedToken.User);
+    }
+
+    public async Task LogoutAsync(Guid userId)
+    {
+        var refreshTokens = await dbContext.RefreshTokens.Where(r => r.UserId == userId).ToListAsync();
+        dbContext.RefreshTokens.RemoveRange(refreshTokens);
+        await dbContext.SaveChangesAsync();
     }
 
     private async Task<RefreshToken> IssueRefreshTokenAsync(User user)

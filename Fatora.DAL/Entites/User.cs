@@ -20,9 +20,14 @@ public class User
     public required string Name { get; set; }
     public required string  PhoneNumber{ get; set; }
     public string? BusinessName{ get; set; }
+    public string? LogoUrl { get; set; }
     public required string City { get; set; }
     public required string Street { get; set; }
     public Role Role { get; set; }=Role.SalesRep;
+    public bool IsActive { get; set; } = true;
+    public string? BankName { get; set; }
+    public string? AccountNumber { get; set; }
+    public string? IBAN { get; set; }
 
 
     public List<Product> Items { get; set; } = new List<Product>();

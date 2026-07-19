@@ -5,5 +5,5 @@ using Fatora.BL.DTOs.Responses;
 
 public interface ILoginService
 {
-    public Task<JwtTokenResponse?> Login(LoginRequest request);
+    public Task<JwtTokenResponse> Login(LoginRequest request);
 }

@@ -229,11 +229,28 @@ namespace Fatora.DAL.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("AccountNumber")
+                        .HasColumnType("text");
+
+                    b.Property<string>("BankName")
+                        .HasColumnType("text");
+
                     b.Property<string>("BusinessName")
                         .HasColumnType("text");
 
                     b.Property<string>("City")
                         .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("IBAN")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("LogoUrl")
                         .HasColumnType("text");
 
                     b.Property<string>("Name")

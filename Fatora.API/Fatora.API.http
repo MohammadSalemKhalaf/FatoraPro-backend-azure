@@ -2,6 +2,11 @@
 @adminToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5MGIwZjM0ZS1hMGEzLTRjZmMtYmY3Mi1jYjM3ZjA5YzkyNmUiLCJyb2xlIjoiQWRtaW4iLCJuYmYiOjE3ODQxMjcxNDIsImV4cCI6MTc4NDEyNzc0MiwiaWF0IjoxNzg0MTI3MTQyLCJpc3MiOiJsb2NhbGhvc3QiLCJhdWQiOiJsb2NhbGhvc3QifQ.MmWe3yGUHvLdfrFG5fk4rwwnmv3EfwhQm6P39tvx4hE
 @refreshToken = PASTE_REFRESH_TOKEN_HERE
 @salesRepToken =eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyYTM2MTExNC1hYWI5LTQzYjgtODQ2Mi1hMzlhNjhhMzViZjEiLCJyb2xlIjoiU2FsZXNSZXAiLCJuYmYiOjE3ODQxMjcxNzAsImV4cCI6MTc4NDEyNzc3MCwiaWF0IjoxNzg0MTI3MTcwLCJpc3MiOiJsb2NhbGhvc3QiLCJhdWQiOiJsb2NhbGhvc3QifQ.OCJBFDWz56egodvEanBU8scHkY2XUCHVddl5Tu4OPDU
+
+
+
+
+
 ### 1) Login as Admin
 POST {{baseUrl}}/api/account/login
 content-Type: application/json
@@ -222,3 +227,50 @@ Authorization: Bearer {{salesRepToken}}
 ### 32) Clients report (Most invoices or Top value)
 GET {{baseUrl}}/api/reports/clients?period=All&sortBy=MostInvoices
 Authorization: Bearer {{salesRepToken}}
+
+### 33) Get own profile (business name, logo, bank details)
+GET {{baseUrl}}/api/profile
+Authorization: Bearer {{salesRepToken}}
+
+### 34) Update bank details
+PUT {{baseUrl}}/api/profile/bank-details
+content-Type: application/json
+Authorization: Bearer {{salesRepToken}}
+
+{
+  "BankName":"Cairo Amman Bank",
+  "AccountNumber":"123456",
+  "IBAN":"JO71CAAB1234567890123456789012"
+}
+
+### 35) Logout (revokes the Sales Rep's active refresh token)
+POST {{baseUrl}}/api/account/logout
+Authorization: Bearer {{salesRepToken}}
+
+### 36) Change password (while logged in)
+POST {{baseUrl}}/api/account/change-password
+content-Type: application/json
+Authorization: Bearer {{salesRepToken}}
+
+{
+  "CurrentPassword":"Password123",
+  "NewPassword":"NewPassword456"
+}
+
+### 37) Admin suspends a Sales Rep (blocks login, does NOT delete data)
+POST {{baseUrl}}/api/users/00000000-0000-0000-0000-000000000000/suspend
+Authorization: Bearer {{adminToken}}
+
+### 38) Admin reactivates a suspended Sales Rep
+POST {{baseUrl}}/api/users/00000000-0000-0000-0000-000000000000/activate
+Authorization: Bearer {{adminToken}}
+
+### 39) Sales Rep permanently deletes their own account (requires password confirmation)
+# WARNING: irreversible — cascades and removes all of this rep's Products/Customers/Orders/Payments/RefreshTokens.
+DELETE {{baseUrl}}/api/profile
+content-Type: application/json
+Authorization: Bearer {{salesRepToken}}
+
+{
+  "Password":"NewPassword456"
+}

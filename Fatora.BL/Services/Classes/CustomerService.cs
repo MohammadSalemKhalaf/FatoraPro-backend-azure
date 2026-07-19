@@ -1,5 +1,6 @@
 using Fatora.BL.DTOs.Requests;
 using Fatora.BL.DTOs.Responses;
+using Fatora.BL.Exceptions;
 using Fatora.BL.Services.Abstractions;
 using Fatora.DAL.Data;
 using Fatora.DAL.Entites;
@@ -36,19 +37,25 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
         return customers.Select(ToResponse).ToList();
     }
 
-    public async Task<CustomerResponse?> GetByIdAsync(Guid userId, int id)
-    {
-        var customer = await FindOwnedActiveCustomer(userId, id);
-        return customer is null ? null : ToResponse(customer);
-    }
-
-    public async Task<CustomerResponse?> UpdateAsync(Guid userId, int id, UpdateCustomerRequest request)
+    public async Task<CustomerResponse> GetByIdAsync(Guid userId, int id)
     {
         var customer = await FindOwnedActiveCustomer(userId, id);
 
         if (customer is null)
         {
-            return null;
+            throw new NotFoundException(nameof(Customer), id);
+        }
+
+        return ToResponse(customer);
+    }
+
+    public async Task<CustomerResponse> UpdateAsync(Guid userId, int id, UpdateCustomerRequest request)
+    {
+        var customer = await FindOwnedActiveCustomer(userId, id);
+
+        if (customer is null)
+        {
+            throw new NotFoundException(nameof(Customer), id);
         }
 
         customer.Name = request.Name;
@@ -62,19 +69,17 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
         return ToResponse(customer);
     }
 
-    public async Task<bool> DeleteAsync(Guid userId, int id)
+    public async Task DeleteAsync(Guid userId, int id)
     {
         var customer = await FindOwnedActiveCustomer(userId, id);
 
         if (customer is null)
         {
-            return false;
+            throw new NotFoundException(nameof(Customer), id);
         }
 
         customer.IsActive = false;
         await dbContext.SaveChangesAsync();
-
-        return true;
     }
 
     public async Task<List<CustomerResponse>> GetArchivedAsync(Guid userId)
@@ -86,13 +91,13 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
         return customers.Select(ToResponse).ToList();
     }
 
-    public async Task<CustomerResponse?> RestoreAsync(Guid userId, int id)
+    public async Task<CustomerResponse> RestoreAsync(Guid userId, int id)
     {
         var customer = await FindOwnedCustomer(userId, id);
 
         if (customer is null)
         {
-            return null;
+            throw new NotFoundException(nameof(Customer), id);
         }
 
         customer.IsActive = true;
@@ -101,19 +106,17 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
         return ToResponse(customer);
     }
 
-    public async Task<bool> PermanentDeleteAsync(Guid userId, int id)
+    public async Task PermanentDeleteAsync(Guid userId, int id)
     {
         var customer = await FindOwnedCustomer(userId, id);
 
         if (customer is null)
         {
-            return false;
+            throw new NotFoundException(nameof(Customer), id);
         }
 
         dbContext.Customers.Remove(customer);
         await dbContext.SaveChangesAsync();
-
-        return true;
     }
 
     private async Task<Customer?> FindOwnedActiveCustomer(Guid userId, int id) =>

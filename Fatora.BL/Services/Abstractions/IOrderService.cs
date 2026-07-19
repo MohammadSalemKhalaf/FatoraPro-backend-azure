@@ -5,9 +5,9 @@ using Fatora.BL.DTOs.Responses;
 
 public interface IOrderService
 {
-    Task<OrderResponse?> CreateAsync(Guid userId, CreateOrderRequest request);
+    Task<OrderResponse> CreateAsync(Guid userId, CreateOrderRequest request);
     Task<List<OrderResponse>> GetAllAsync(Guid userId);
-    Task<OrderResponse?> GetByIdAsync(Guid userId, Guid id);
-    Task<OrderResponse?> UpdateAsync(Guid userId, Guid id, UpdateOrderRequest request);
+    Task<OrderResponse> GetByIdAsync(Guid userId, Guid id);
+    Task<OrderResponse> UpdateAsync(Guid userId, Guid id, UpdateOrderRequest request);
     Task<OrderSummaryResponse> GetSummaryAsync(Guid userId, SummaryPeriod period);
 }

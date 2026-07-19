@@ -1,4 +1,5 @@
 using Fatora.API.Extensions;
+using Fatora.API.Validators.OrderValidators;
 using Fatora.BL.DTOs.Requests;
 using Fatora.BL.Services.Abstractions;
 using Microsoft.AspNetCore.Authorization;
@@ -10,18 +11,23 @@ namespace Fatora.API.Controllers;
 [Route("api/[controller]")]
 [ApiController]
 [Authorize(Roles = "SalesRep")]
-public class OrdersController(IOrderService orderService, IPaymentService paymentService) : ControllerBase
+public class OrdersController(
+    IOrderService orderService,
+    IPaymentService paymentService,
+    CreateOrderRequestValidator createOrderValidator,
+    UpdateOrderRequestValidator updateOrderValidator,
+    CreatePaymentRequestValidator createPaymentValidator) : ControllerBase
 {
     [HttpPost]
     public async Task<IActionResult> Create(CreateOrderRequest request)
     {
-        var result = await orderService.CreateAsync(User.GetUserId(), request);
-
-        if (result is null)
+        var validationResult = await createOrderValidator.ValidateAsync(request);
+        if (!validationResult.IsValid)
         {
-            return BadRequest(new { message = "Customer or one or more products were not found." });
+            return BadRequest(validationResult.Errors);
         }
 
+        var result = await orderService.CreateAsync(User.GetUserId(), request);
         return StatusCode(StatusCodes.Status201Created, result);
     }
 
@@ -43,47 +49,46 @@ public class OrdersController(IOrderService orderService, IPaymentService paymen
     public async Task<IActionResult> GetById(Guid id)
     {
         var result = await orderService.GetByIdAsync(User.GetUserId(), id);
-        return result is null ? NotFound() : Ok(result);
+        return Ok(result);
     }
 
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, UpdateOrderRequest request)
     {
-        var result = await orderService.UpdateAsync(User.GetUserId(), id, request);
-
-        if (result is null)
+        var validationResult = await updateOrderValidator.ValidateAsync(request);
+        if (!validationResult.IsValid)
         {
-            return NotFound(new { message = "Order not found, or customer/one or more products were not found." });
+            return BadRequest(validationResult.Errors);
         }
 
+        var result = await orderService.UpdateAsync(User.GetUserId(), id, request);
         return Ok(result);
     }
 
     [HttpPost("{orderId:guid}/payments")]
     public async Task<IActionResult> AddPayment(Guid orderId, CreatePaymentRequest request)
     {
-        try
+        var validationResult = await createPaymentValidator.ValidateAsync(request);
+        if (!validationResult.IsValid)
         {
-            var result = await paymentService.AddPaymentAsync(User.GetUserId(), orderId, request);
-            return result is null ? NotFound() : StatusCode(StatusCodes.Status201Created, result);
+            return BadRequest(validationResult.Errors);
         }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+
+        var result = await paymentService.AddPaymentAsync(User.GetUserId(), orderId, request);
+        return StatusCode(StatusCodes.Status201Created, result);
     }
 
     [HttpGet("{orderId:guid}/payments")]
     public async Task<IActionResult> GetPayments(Guid orderId)
     {
         var result = await paymentService.GetPaymentsAsync(User.GetUserId(), orderId);
-        return result is null ? NotFound() : Ok(result);
+        return Ok(result);
     }
 
     [HttpDelete("{orderId:guid}/payments/{paymentId:int}")]
     public async Task<IActionResult> DeletePayment(Guid orderId, int paymentId)
     {
-        var deleted = await paymentService.DeletePaymentAsync(User.GetUserId(), orderId, paymentId);
-        return deleted ? NoContent() : NotFound();
+        await paymentService.DeletePaymentAsync(User.GetUserId(), orderId, paymentId);
+        return NoContent();
     }
 }

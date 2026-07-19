@@ -1,5 +1,6 @@
 using Fatora.BL.DTOs.Requests;
 using Fatora.BL.DTOs.Responses;
+using Fatora.BL.Exceptions;
 using Fatora.BL.Services.Abstractions;
 using Fatora.DAL.Data;
 using Fatora.DAL.Entites;
@@ -9,20 +10,20 @@ namespace Fatora.BL.Services.Classes;
 
 public class OrderService(AppDbContext dbContext) : IOrderService
 {
-    public async Task<OrderResponse?> CreateAsync(Guid userId, CreateOrderRequest request)
+    public async Task<OrderResponse> CreateAsync(Guid userId, CreateOrderRequest request)
     {
         var customer = await FindOwnedActiveCustomer(userId, request.CustomerId);
 
         if (customer is null)
         {
-            return null;
+            throw new NotFoundException(nameof(Customer), request.CustomerId);
         }
 
         var productsById = await LoadOwnedActiveProducts(userId, request.Items);
 
         if (productsById is null)
         {
-            return null;
+            throw new NotFoundException("One or more products", string.Join(",", request.Items.Select(i => i.ProductId)));
         }
 
         var order = new Order
@@ -59,33 +60,39 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         return orders.Select(ToResponse).ToList();
     }
 
-    public async Task<OrderResponse?> GetByIdAsync(Guid userId, Guid id)
-    {
-        var order = await FindOwnedOrder(userId, id);
-        return order is null ? null : ToResponse(order);
-    }
-
-    public async Task<OrderResponse?> UpdateAsync(Guid userId, Guid id, UpdateOrderRequest request)
+    public async Task<OrderResponse> GetByIdAsync(Guid userId, Guid id)
     {
         var order = await FindOwnedOrder(userId, id);
 
         if (order is null)
         {
-            return null;
+            throw new NotFoundException(nameof(Order), id);
+        }
+
+        return ToResponse(order);
+    }
+
+    public async Task<OrderResponse> UpdateAsync(Guid userId, Guid id, UpdateOrderRequest request)
+    {
+        var order = await FindOwnedOrder(userId, id);
+
+        if (order is null)
+        {
+            throw new NotFoundException(nameof(Order), id);
         }
 
         var customer = await FindOwnedActiveCustomer(userId, request.CustomerId);
 
         if (customer is null)
         {
-            return null;
+            throw new NotFoundException(nameof(Customer), request.CustomerId);
         }
 
         var productsById = await LoadOwnedActiveProducts(userId, request.Items);
 
         if (productsById is null)
         {
-            return null;
+            throw new NotFoundException("One or more products", string.Join(",", request.Items.Select(i => i.ProductId)));
         }
 
         order.CustomerId = customer.Id;
@@ -97,6 +104,7 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         order.OrderItems = request.Items.Select(i => new OrderItem
         {
             ProductId = i.ProductId,
+            Product = productsById[i.ProductId],
             Quantity = i.Quantity,
             UnitPrice = productsById[i.ProductId].SellPrice
         }).ToList();
@@ -138,25 +146,44 @@ public class OrderService(AppDbContext dbContext) : IOrderService
 
         foreach (var order in orders)
         {
-            if (order.RemainingBalance <= 0)
+            switch (ComputeStatus(order, today))
             {
-                summary.PaidCount++;
-            }
-            else if (order.DueDate < today)
-            {
-                summary.OverdueCount++;
-            }
-            else if (order.PaidAmount > 0)
-            {
-                summary.PartiallyPaidCount++;
-            }
-            else
-            {
-                summary.UnpaidCount++;
+                case "Paid":
+                    summary.PaidCount++;
+                    break;
+                case "Overdue":
+                    summary.OverdueCount++;
+                    break;
+                case "PartiallyPaid":
+                    summary.PartiallyPaidCount++;
+                    break;
+                default:
+                    summary.SentCount++;
+                    break;
             }
         }
 
         return summary;
+    }
+
+    private static string ComputeStatus(Order order, DateOnly today)
+    {
+        if (order.RemainingBalance <= 0)
+        {
+            return "Paid";
+        }
+
+        if (order.DueDate < today)
+        {
+            return "Overdue";
+        }
+
+        if (order.PaidAmount > 0)
+        {
+            return "PartiallyPaid";
+        }
+
+        return "Sent";
     }
 
     private async Task<Customer?> FindOwnedActiveCustomer(Guid userId, int customerId) =>
@@ -186,8 +213,12 @@ public class OrderService(AppDbContext dbContext) : IOrderService
     {
         Id = order.Id,
         InvoiceNumber = order.InvoiceNumber,
+        Status = ComputeStatus(order, DateOnly.FromDateTime(DateTime.UtcNow)),
         CustomerId = order.CustomerId,
         CustomerName = order.Customer.Name,
+        CustomerPhoneNumber = order.Customer.PhoneNumber,
+        CustomerStreet = order.Customer.Street,
+        CustomerCity = order.Customer.City,
         CreatedAt = order.CreatedAt,
         DueDate = order.DueDate,
         Discount = order.Discount,

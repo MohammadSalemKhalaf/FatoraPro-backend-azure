@@ -1,5 +1,8 @@
-﻿using Fatora.BL.DTOs.Requests;
+using Fatora.API.Extensions;
+using Fatora.API.Validators;
+using Fatora.BL.DTOs.Requests;
 using Fatora.BL.Services.Abstractions;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
@@ -7,31 +10,59 @@ namespace Fatora.API.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-public class AccountController(ILoginService loginService, IJwtTokenProviderService jwtTokenProvider) : ControllerBase
+public class AccountController(
+    ILoginService loginService,
+    IJwtTokenProviderService jwtTokenProvider,
+    IUserService userService,
+    LoginRequestValidator loginRequestValidator,
+    RefreshTokenValidator refreshTokenValidator,
+    ChangePasswordRequestValidator changePasswordValidator) : ControllerBase
 {
     [HttpPost("login")]
     public async Task<IActionResult> login(LoginRequest request)
     {
-        var res = await loginService.Login(request);
-
-        if (res is null)
+        var validationResult = await loginRequestValidator.ValidateAsync(request);
+        if (!validationResult.IsValid)
         {
-            return Unauthorized(new { message = "Invalid username or password" });
+            return BadRequest(validationResult.Errors);
         }
 
+        var res = await loginService.Login(request);
         return Ok(res);
     }
 
     [HttpPost("refresh-token")]
     public async Task<IActionResult> refreshToken(RefreshTokenRequest request)
     {
-        var res = await jwtTokenProvider.RefreshTokenAsync(request.RefreshToken);
-
-        if (res is null)
+        var validationResult = await refreshTokenValidator.ValidateAsync(request);
+        if (!validationResult.IsValid)
         {
-            return Unauthorized(new { message = "Invalid or expired refresh token" });
+            return BadRequest(validationResult.Errors);
         }
 
+        var res = await jwtTokenProvider.RefreshTokenAsync(request.RefreshToken);
         return Ok(res);
+    }
+
+    [Authorize]
+    [HttpPost("logout")]
+    public async Task<IActionResult> Logout()
+    {
+        await jwtTokenProvider.LogoutAsync(User.GetUserId());
+        return NoContent();
+    }
+
+    [Authorize]
+    [HttpPost("change-password")]
+    public async Task<IActionResult> ChangePassword(ChangePasswordRequest request)
+    {
+        var validationResult = await changePasswordValidator.ValidateAsync(request);
+        if (!validationResult.IsValid)
+        {
+            return BadRequest(validationResult.Errors);
+        }
+
+        await userService.ChangePasswordAsync(User.GetUserId(), request.CurrentPassword, request.NewPassword);
+        return NoContent();
     }
 }

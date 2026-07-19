@@ -1,5 +1,6 @@
 using Fatora.BL.DTOs.Requests;
 using Fatora.BL.DTOs.Responses;
+using Fatora.BL.Exceptions;
 using Fatora.BL.Services.Abstractions;
 using Fatora.DAL.Data;
 using Microsoft.EntityFrameworkCore;
@@ -8,18 +9,22 @@ namespace Fatora.BL.Services.Classes;
 
 public class LoginService(AppDbContext dbContext, IPasswordHasherService passwordHasher, IJwtTokenProviderService jwtTokenProvider) : ILoginService
 {
-    public async Task<JwtTokenResponse?> Login(LoginRequest request)
+    public async Task<JwtTokenResponse> Login(LoginRequest request)
     {
         var user = await dbContext.Users.FirstOrDefaultAsync(u => u.UserName.Equals(request.UserName));
 
-        if (user is null)
+        // Deliberately the same exception/message for "user not found" and "wrong password" -
+        // distinguishing them would let a caller enumerate valid usernames.
+        if (user is null || !passwordHasher.Verify(user, request.Password, user.Password))
         {
-            return null;
+            throw new UnauthorizedException("Invalid username or password");
         }
 
-        if (!passwordHasher.Verify(user, request.Password, user.Password))
+        // Safe to be specific here - the caller already proved they know valid credentials,
+        // so this doesn't create an enumeration risk like the check above does.
+        if (!user.IsActive)
         {
-            return null;
+            throw new UnauthorizedException("This account has been suspended.");
         }
 
         return await jwtTokenProvider.GenerateToken(user);
