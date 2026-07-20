@@ -34,8 +34,19 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         return base.SaveChangesAsync(cancellationToken);
     }
 
+    // The sync push endpoint must preserve the timestamp the edit actually happened on the device
+    // (possibly hours ago, while offline), not the moment the request reached the server - otherwise
+    // last-write-wins conflict resolution would be meaningless. It sets CreatedAt/UpdatedAt itself and
+    // flips this off for the duration of that save.
+    public bool SuppressAutoTimestamps { get; set; }
+
     private void StampSyncTimestamps()
     {
+        if (SuppressAutoTimestamps)
+        {
+            return;
+        }
+
         var now = DateTime.UtcNow;
 
         foreach (var entry in ChangeTracker.Entries<ISyncableEntity>())

@@ -125,7 +125,7 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
     private async Task<Customer?> FindOwnedCustomer(Guid userId, Guid id) =>
         await dbContext.Customers.FirstOrDefaultAsync(c => c.Id == id && c.UserId == userId);
 
-    private static CustomerResponse ToResponse(Customer customer) => new()
+    internal static CustomerResponse ToResponse(Customer customer) => new()
     {
         Id = customer.Id,
         Name = customer.Name,

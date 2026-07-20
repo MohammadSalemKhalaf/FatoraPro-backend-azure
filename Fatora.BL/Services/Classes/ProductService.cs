@@ -140,7 +140,7 @@ public class ProductService(AppDbContext dbContext) : IProductService
     private async Task<Product?> FindOwnedProduct(Guid userId, Guid id) =>
         await dbContext.Products.FirstOrDefaultAsync(p => p.Id == id && p.UserId == userId);
 
-    private static ProductResponse ToResponse(Product product) => new()
+    internal static ProductResponse ToResponse(Product product) => new()
     {
         Id = product.Id,
         Name = product.Name,

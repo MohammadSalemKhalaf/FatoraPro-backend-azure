@@ -269,3 +269,35 @@ Authorization: Bearer {{salesRepToken}}
 {
   "Password":"NewPassword456"
 }
+
+### 39) Offline sync - push pending local changes (client-generated ids, real device edit timestamps)
+POST {{baseUrl}}/api/sync/push
+content-Type: application/json
+Authorization: Bearer {{salesRepToken}}
+
+{
+  "Customers": [
+    { "Id":"00000000-0000-0000-0000-000000000001", "Name":"Offline Client", "StoreName":null, "PhoneNumber":"0777777777", "Street":"St", "City":"Nablus", "IsActive":true, "UpdatedAt":"2026-07-20T15:00:00Z" }
+  ],
+  "Products": [
+    { "Id":"00000000-0000-0000-0000-000000000002", "Name":"Offline Widget", "Description":null, "ImageUrl":null, "PurchasePrice":3, "SellPrice":10, "IsActive":true, "UpdatedAt":"2026-07-20T15:00:00Z" }
+  ],
+  "Orders": [
+    {
+      "Id":"00000000-0000-0000-0000-000000000003",
+      "CustomerId":"00000000-0000-0000-0000-000000000001",
+      "DueDate":"2026-08-01",
+      "Discount":0,
+      "Notes":"made offline",
+      "PaidAmount":0,
+      "UpdatedAt":"2026-07-20T15:00:00Z",
+      "Items":[ { "ProductId":"00000000-0000-0000-0000-000000000002", "Quantity":4, "UnitPrice":10 } ]
+    }
+  ],
+  "DeletedOrderIds": []
+}
+
+### 40) Offline sync - pull everything changed since the device's last successful sync
+# Store the "serverTime" from the response as the new watermark for the next pull - not the device's own clock.
+GET {{baseUrl}}/api/sync/pull?since=2026-07-20T00:00:00Z
+Authorization: Bearer {{salesRepToken}}

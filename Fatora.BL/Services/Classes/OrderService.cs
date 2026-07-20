@@ -100,17 +100,23 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         order.Discount = request.Discount;
         order.Notes = request.Notes;
 
+        // Managed directly through the DbSet (not via the order.OrderItems navigation setter) -
+        // replacing a required collection navigation by reassigning it confuses EF's change tracker
+        // into generating an UPDATE against the row it just DELETEd instead of an INSERT.
         dbContext.OrderItems.RemoveRange(order.OrderItems);
-        order.OrderItems = request.Items.Select(i => new OrderItem
+        var newItems = request.Items.Select(i => new OrderItem
         {
+            OrderId = order.Id,
             ProductId = i.ProductId,
             Product = productsById[i.ProductId],
             Quantity = i.Quantity,
             UnitPrice = productsById[i.ProductId].SellPrice
         }).ToList();
+        dbContext.OrderItems.AddRange(newItems);
 
         await dbContext.SaveChangesAsync();
 
+        order.OrderItems = newItems;
         order.Customer = customer;
         return ToResponse(order);
     }
@@ -199,7 +205,7 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         return summary;
     }
 
-    private static string ComputeStatus(Order order, DateOnly today)
+    internal static string ComputeStatus(Order order, DateOnly today)
     {
         if (order.RemainingBalance <= 0)
         {
@@ -242,7 +248,7 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         return $"INV-{count + 1:D4}";
     }
 
-    private static OrderResponse ToResponse(Order order) => new()
+    internal static OrderResponse ToResponse(Order order) => new()
     {
         Id = order.Id,
         InvoiceNumber = order.InvoiceNumber,

@@ -17,6 +17,7 @@ It is intentionally simple: fast to use in the field, easy to reason about, and 
 - [Authentication & Roles](#authentication--roles)
 - [Features](#features)
 - [API Reference](#api-reference)
+- [Offline-First Sync](#offline-first-sync)
 - [End-to-End Example Flow](#end-to-end-example-flow)
 - [Maintaining This Document](#maintaining-this-document)
 
@@ -116,6 +117,8 @@ These are decisions that were deliberately made after discussion, not defaults �
 - **Self-account-deletion vs. Admin-suspend are different, deliberate concepts:** a Sales Rep can permanently delete their *own* account (password-confirmed, full cascade — a security/exit decision). An Admin can only *suspend/reactivate* a rep's account (blocks login, keeps all data) — reserved for future subscription/access-control needs, not a substitute for deletion.
 - **User-enumeration is explicitly guarded against** on login: a wrong username and a wrong password return the identical `401` message. Do not "improve" this by giving more specific error messages per case — that was a fixed vulnerability, not an oversight.
 - **Money-sensitive fields are frozen at creation time.** `OrderItem.UnitPrice` is a snapshot of the product's price *at the moment the invoice was created* — it must never silently track later changes to `Product.SellPrice`.
+- **`Customer.Id`, `Product.Id`, and `OrderItem.Id` are `Guid`, not auto-increment `int`.** This is required for offline-first support: the mobile app must be able to generate a globally-unique id for a new customer/product while it has no network connection at all. `Order.Id` was already `Guid` from the start. `User.Id`/`RefreshToken.Id` stayed as they were — users are never created offline (Admin-only, always online) and refresh tokens never touch the mobile client's local storage.
+- **Every syncable entity (`Customer`, `Product`, `Order`) tracks `CreatedAt`/`UpdatedAt`, stamped centrally** by `AppDbContext.SaveChanges` via the `ISyncableEntity` marker interface — never set manually in a service, so it can't be forgotten. See [Offline-First Sync](#offline-first-sync) for why this exists.
 
 ---
 
@@ -165,6 +168,7 @@ Login (`POST /api/account/login`) returns a JWT access token (short-lived) and a
 - **Dashboard**: order summary (count/total/paid/outstanding by status) filterable by Week/Month/Year/All.
 - **Reports**: sales-over-time, items breakdown (most sold / top value), clients breakdown (most invoices / top value).
 - **Profile**: business name, logo upload, bank details (for customers to transfer payment to).
+- **Offline sync**: batch push (upload locally-made changes) and pull (delta download) so the mobile app keeps working with no connection — see [Offline-First Sync](#offline-first-sync).
 
 ---
 
@@ -181,6 +185,27 @@ This is a quick map of controllers and their base routes — see `Fatora.API.htt
 | `ProductsController` | `/api/products` | Full CRUD + image upload + archive/restore/permanent-delete |
 | `OrdersController` | `/api/orders` | Create/list/get/update/delete, `summary`, `{id}/record-payment` |
 | `ReportsController` | `/api/reports` | `sales`, `items`, `clients` |
+| `SyncController` | `/api/sync` | `push` (batch upsert), `pull?since=` (delta download) |
+
+---
+
+## Offline-First Sync
+
+The mobile app must keep working with no internet connection — create/edit customers, products, and invoices offline, then reconcile with the server once connectivity returns. This section is the contract between the two sides.
+
+**Why `Guid` ids matter**: a device generates its own id for anything it creates offline (`Guid.NewGuid()`, client-side), since it cannot ask the server "what's the next id?" without a connection. This is *why* `Customer`, `Product`, `Order`, and `OrderItem` all use `Guid` primary keys.
+
+**Push** — `POST /api/sync/push`: the device sends every locally-pending change in one batch (`Customers`, `Products`, `Orders` with their `Items`, plus `DeletedOrderIds`). Each item carries the id the device generated and the real timestamp of when the edit happened *on the device* (`UpdatedAt`) — not when it reaches the server. The server responds with a per-item result (`Applied`, `Conflict`, `Rejected`, or `Deleted`) so a single bad record never blocks the rest of the batch — every item is validated and saved independently.
+
+**Pull** — `GET /api/sync/pull?since={timestamp}`: returns everything for that user with `UpdatedAt` newer than `since`, plus the server's own clock (`serverTime`). The client must store `serverTime` — not its own clock — as the watermark for its *next* pull, to avoid clock-skew bugs between devices.
+
+**Conflict resolution is last-write-wins by `UpdatedAt`.** If the incoming edit's timestamp is older than or equal to what the server already has, the push is rejected as a `Conflict` and the server's version is kept untouched — the device should pull to reconcile. This is a deliberate, simple choice for a single-device-per-rep app; it is not conflict-free merging and was never meant to be.
+
+**Invoice numbers are always assigned by the server**, at the moment a new order is pushed — never by the device. A rep creating an invoice offline sees it locally without its real `INV-XXXX` number until the next successful sync.
+
+**Orders deleted offline** are communicated via `DeletedOrderIds` in the push payload and hard-deleted server-side (matching the existing "reps can permanently delete their own invoices" rule). There is deliberately no delete-tombstone in the *pull* response — with one device per rep, the device that deleted something already knows it did; this would need revisiting if multi-device-per-rep is ever supported.
+
+**Why the timestamp auto-stamping has an escape hatch**: `AppDbContext` normally stamps `UpdatedAt = now()` on every save (see Key Business Rules). The sync push path needs to preserve the *device's* original edit time instead, so it sets `AppDbContext.SuppressAutoTimestamps = true` for the duration of the push and manages `CreatedAt`/`UpdatedAt` itself from the payload.
 
 ---
 
@@ -214,10 +239,10 @@ POST /api/products
 { "Name": "Widget", "PurchasePrice": 5, "SellPrice": 15 }
 ```
 
-**5. The rep creates an invoice** for that customer with line items:
+**5. The rep creates an invoice** for that customer with line items (`CustomerId`/`ProductId` are the `Guid`s returned when each was created):
 ```
 POST /api/orders
-{ "CustomerId": 1, "DueDate": "2026-08-15", "Discount": 0, "Items": [ { "ProductId": 1, "Quantity": 3 } ] }
+{ "CustomerId": "<customer-guid>", "DueDate": "2026-08-15", "Discount": 0, "Items": [ { "ProductId": "<product-guid>", "Quantity": 3 } ] }
 → Status: "Sent", Total: 45, PaidAmount: 0
 ```
 `OrderItem.UnitPrice` is frozen at 15 the moment this is created — later changes to the product's `SellPrice` never retroactively affect this invoice.
@@ -251,7 +276,7 @@ DELETE /api/orders/{id}
 **10. At the end of a busy week, the rep pulls a report:**
 ```
 GET /api/reports/clients?period=Week&sortBy=TopValue
-→ [ { "customerId": 1, "customerName": "Abu Ahmad", "invoiceCount": 4, "totalValue": 320 }, ... ]
+→ [ { "customerId": "<customer-guid>", "customerName": "Abu Ahmad", "invoiceCount": 4, "totalValue": 320 }, ... ]
 ```
 
 ---
