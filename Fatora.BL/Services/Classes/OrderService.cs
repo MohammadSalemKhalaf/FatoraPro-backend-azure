@@ -115,6 +115,39 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         return ToResponse(order);
     }
 
+    public async Task DeleteAsync(Guid userId, Guid id)
+    {
+        var order = await dbContext.Orders.FirstOrDefaultAsync(o => o.Id == id && o.UserId == userId);
+
+        if (order is null)
+        {
+            throw new NotFoundException(nameof(Order), id);
+        }
+
+        dbContext.Orders.Remove(order);
+        await dbContext.SaveChangesAsync();
+    }
+
+    public async Task<OrderResponse> RecordPaymentAsync(Guid userId, Guid id, RecordPaymentRequest request)
+    {
+        var order = await FindOwnedOrder(userId, id);
+
+        if (order is null)
+        {
+            throw new NotFoundException(nameof(Order), id);
+        }
+
+        if (request.Amount > order.RemainingBalance)
+        {
+            throw new BadRequestException($"Payment amount ({request.Amount}) exceeds the remaining balance ({order.RemainingBalance}).");
+        }
+
+        order.PaidAmount += request.Amount;
+        await dbContext.SaveChangesAsync();
+
+        return ToResponse(order);
+    }
+
     public async Task<OrderSummaryResponse> GetSummaryAsync(Guid userId, SummaryPeriod period)
     {
         var cutoff = period switch
@@ -237,13 +270,6 @@ public class OrderService(AppDbContext dbContext) : IOrderService
             Quantity = oi.Quantity,
             UnitPrice = oi.UnitPrice,
             TotalPrice = oi.TotalPrice
-        }).ToList(),
-        Payments = order.Payments.Select(p => new PaymentResponse
-        {
-            Id = p.Id,
-            Amount = p.Amount,
-            PaidAt = p.PaidAt,
-            Notes = p.Notes
         }).ToList()
     };
 }

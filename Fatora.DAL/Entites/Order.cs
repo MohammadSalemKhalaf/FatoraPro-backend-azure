@@ -15,7 +15,7 @@ public class Order
     public decimal Subtotal => OrderItems.Sum(o => o.TotalPrice);
     public decimal DiscountAmount => Subtotal * (Discount / 100m);
     public decimal Total => Subtotal - DiscountAmount;
-    public decimal PaidAmount => Payments.Sum(p => p.Amount);
+    public decimal PaidAmount { get; set; }
     public decimal RemainingBalance => Total - PaidAmount;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -28,6 +28,5 @@ public class Order
     public Guid UserId { get; set; }
     public User User { get; set; }
     public List<OrderItem> OrderItems { get; set; } = new List<OrderItem>();
-    public List<Payment> Payments { get; set; } = new List<Payment>();
 
 }

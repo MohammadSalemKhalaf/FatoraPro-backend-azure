@@ -20,5 +20,4 @@ public class OrderResponse
     public decimal PaidAmount { get; set; }
     public decimal RemainingBalance { get; set; }
     public List<OrderItemResponse> Items { get; set; } = new();
-    public List<PaymentResponse> Payments { get; set; } = new();
 }
