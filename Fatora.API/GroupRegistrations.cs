@@ -20,7 +20,6 @@ public static class GroupRegistrations
         Services.AddScoped<IProductService, ProductService>();
         Services.AddScoped<ICustomerService, CustomerService>();
         Services.AddScoped<IOrderService, OrderService>();
-        Services.AddScoped<IPaymentService, PaymentService>();
         Services.AddScoped<IReportService, ReportService>();
         Services.AddScoped<IFileStorageService, FileStorageService>();
 
@@ -32,7 +31,7 @@ public static class GroupRegistrations
         Services.AddScoped<UpdateProductRequestValidator>();
         Services.AddScoped<CreateOrderRequestValidator>();
         Services.AddScoped<UpdateOrderRequestValidator>();
-        Services.AddScoped<CreatePaymentRequestValidator>();
+        Services.AddScoped<RecordPaymentRequestValidator>();
         Services.AddScoped<CreateSalesRepRequestValidator>();
         Services.AddScoped<ChangePasswordRequestValidator>();
         Services.AddScoped<DeleteAccountRequestValidator>();

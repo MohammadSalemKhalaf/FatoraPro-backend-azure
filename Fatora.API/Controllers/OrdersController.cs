@@ -13,10 +13,9 @@ namespace Fatora.API.Controllers;
 [Authorize(Roles = "SalesRep")]
 public class OrdersController(
     IOrderService orderService,
-    IPaymentService paymentService,
     CreateOrderRequestValidator createOrderValidator,
     UpdateOrderRequestValidator updateOrderValidator,
-    CreatePaymentRequestValidator createPaymentValidator) : ControllerBase
+    RecordPaymentRequestValidator recordPaymentValidator) : ControllerBase
 {
     [HttpPost]
     public async Task<IActionResult> Create(CreateOrderRequest request)
@@ -65,30 +64,23 @@ public class OrdersController(
         return Ok(result);
     }
 
-    [HttpPost("{orderId:guid}/payments")]
-    public async Task<IActionResult> AddPayment(Guid orderId, CreatePaymentRequest request)
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id)
     {
-        var validationResult = await createPaymentValidator.ValidateAsync(request);
+        await orderService.DeleteAsync(User.GetUserId(), id);
+        return NoContent();
+    }
+
+    [HttpPost("{id:guid}/record-payment")]
+    public async Task<IActionResult> RecordPayment(Guid id, RecordPaymentRequest request)
+    {
+        var validationResult = await recordPaymentValidator.ValidateAsync(request);
         if (!validationResult.IsValid)
         {
             return BadRequest(validationResult.Errors);
         }
 
-        var result = await paymentService.AddPaymentAsync(User.GetUserId(), orderId, request);
-        return StatusCode(StatusCodes.Status201Created, result);
-    }
-
-    [HttpGet("{orderId:guid}/payments")]
-    public async Task<IActionResult> GetPayments(Guid orderId)
-    {
-        var result = await paymentService.GetPaymentsAsync(User.GetUserId(), orderId);
+        var result = await orderService.RecordPaymentAsync(User.GetUserId(), id, request);
         return Ok(result);
-    }
-
-    [HttpDelete("{orderId:guid}/payments/{paymentId:int}")]
-    public async Task<IActionResult> DeletePayment(Guid orderId, int paymentId)
-    {
-        await paymentService.DeletePaymentAsync(User.GetUserId(), orderId, paymentId);
-        return NoContent();
     }
 }

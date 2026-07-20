@@ -2,7 +2,7 @@ namespace Fatora.BL.DTOs.Responses;
 
 public class OrderItemResponse
 {
-    public int ProductId { get; set; }
+    public Guid ProductId { get; set; }
     public string ProductName { get; set; } = string.Empty;
     public string? ProductDescription { get; set; }
     public string? ProductImageUrl { get; set; }

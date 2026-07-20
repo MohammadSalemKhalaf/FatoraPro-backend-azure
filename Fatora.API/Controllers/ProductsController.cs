@@ -38,15 +38,15 @@ public class ProductsController(
         return Ok(result);
     }
 
-    [HttpGet("{id:int}")]
-    public async Task<IActionResult> GetById(int id)
+    [HttpGet("{id:guid}")]
+    public async Task<IActionResult> GetById(Guid id)
     {
         var result = await productService.GetByIdAsync(User.GetUserId(), id);
         return Ok(result);
     }
 
-    [HttpPut("{id:int}")]
-    public async Task<IActionResult> Update(int id, UpdateProductRequest request)
+    [HttpPut("{id:guid}")]
+    public async Task<IActionResult> Update(Guid id, UpdateProductRequest request)
     {
         var validationResult = await updateValidator.ValidateAsync(request);
         if (!validationResult.IsValid)
@@ -58,8 +58,8 @@ public class ProductsController(
         return Ok(result);
     }
 
-    [HttpPost("{id:int}/image")]
-    public async Task<IActionResult> UploadImage(int id, IFormFile file)
+    [HttpPost("{id:guid}/image")]
+    public async Task<IActionResult> UploadImage(Guid id, IFormFile file)
     {
         var product = await productService.GetByIdAsync(User.GetUserId(), id);
         var imageUrl = await fileStorageService.SaveImageAsync(file, "products", product.ImageUrl);
@@ -67,8 +67,8 @@ public class ProductsController(
         return Ok(result);
     }
 
-    [HttpDelete("{id:int}")]
-    public async Task<IActionResult> Delete(int id)
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id)
     {
         await productService.DeleteAsync(User.GetUserId(), id);
         return NoContent();
@@ -81,15 +81,15 @@ public class ProductsController(
         return Ok(result);
     }
 
-    [HttpPost("{id:int}/restore")]
-    public async Task<IActionResult> Restore(int id)
+    [HttpPost("{id:guid}/restore")]
+    public async Task<IActionResult> Restore(Guid id)
     {
         var result = await productService.RestoreAsync(User.GetUserId(), id);
         return Ok(result);
     }
 
-    [HttpDelete("{id:int}/permanent")]
-    public async Task<IActionResult> PermanentDelete(int id)
+    [HttpDelete("{id:guid}/permanent")]
+    public async Task<IActionResult> PermanentDelete(Guid id)
     {
         await productService.PermanentDeleteAsync(User.GetUserId(), id);
         return NoContent();

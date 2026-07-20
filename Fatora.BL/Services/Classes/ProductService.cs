@@ -37,7 +37,7 @@ public class ProductService(AppDbContext dbContext) : IProductService
         return products.Select(ToResponse).ToList();
     }
 
-    public async Task<ProductResponse> GetByIdAsync(Guid userId, int id)
+    public async Task<ProductResponse> GetByIdAsync(Guid userId, Guid id)
     {
         var product = await FindOwnedActiveProduct(userId, id);
 
@@ -49,7 +49,7 @@ public class ProductService(AppDbContext dbContext) : IProductService
         return ToResponse(product);
     }
 
-    public async Task<ProductResponse> UpdateAsync(Guid userId, int id, UpdateProductRequest request)
+    public async Task<ProductResponse> UpdateAsync(Guid userId, Guid id, UpdateProductRequest request)
     {
         var product = await FindOwnedActiveProduct(userId, id);
 
@@ -69,7 +69,7 @@ public class ProductService(AppDbContext dbContext) : IProductService
         return ToResponse(product);
     }
 
-    public async Task<ProductResponse> UpdateImageAsync(Guid userId, int id, string imageUrl)
+    public async Task<ProductResponse> UpdateImageAsync(Guid userId, Guid id, string imageUrl)
     {
         var product = await FindOwnedActiveProduct(userId, id);
 
@@ -84,7 +84,7 @@ public class ProductService(AppDbContext dbContext) : IProductService
         return ToResponse(product);
     }
 
-    public async Task DeleteAsync(Guid userId, int id)
+    public async Task DeleteAsync(Guid userId, Guid id)
     {
         var product = await FindOwnedActiveProduct(userId, id);
 
@@ -106,7 +106,7 @@ public class ProductService(AppDbContext dbContext) : IProductService
         return products.Select(ToResponse).ToList();
     }
 
-    public async Task<ProductResponse> RestoreAsync(Guid userId, int id)
+    public async Task<ProductResponse> RestoreAsync(Guid userId, Guid id)
     {
         var product = await FindOwnedProduct(userId, id);
 
@@ -121,7 +121,7 @@ public class ProductService(AppDbContext dbContext) : IProductService
         return ToResponse(product);
     }
 
-    public async Task PermanentDeleteAsync(Guid userId, int id)
+    public async Task PermanentDeleteAsync(Guid userId, Guid id)
     {
         var product = await FindOwnedProduct(userId, id);
 
@@ -134,10 +134,10 @@ public class ProductService(AppDbContext dbContext) : IProductService
         await dbContext.SaveChangesAsync();
     }
 
-    private async Task<Product?> FindOwnedActiveProduct(Guid userId, int id) =>
+    private async Task<Product?> FindOwnedActiveProduct(Guid userId, Guid id) =>
         await dbContext.Products.FirstOrDefaultAsync(p => p.Id == id && p.UserId == userId && p.IsActive);
 
-    private async Task<Product?> FindOwnedProduct(Guid userId, int id) =>
+    private async Task<Product?> FindOwnedProduct(Guid userId, Guid id) =>
         await dbContext.Products.FirstOrDefaultAsync(p => p.Id == id && p.UserId == userId);
 
     private static ProductResponse ToResponse(Product product) => new()

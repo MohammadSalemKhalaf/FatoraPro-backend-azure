@@ -2,7 +2,7 @@ namespace Fatora.BL.DTOs.Responses;
 
 public class CustomerResponse
 {
-    public int Id { get; set; }
+    public Guid Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public string? StoreName { get; set; }
     public string PhoneNumber { get; set; } = string.Empty;

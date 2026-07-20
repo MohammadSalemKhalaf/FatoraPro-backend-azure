@@ -69,11 +69,11 @@ GET {{baseUrl}}/api/products
 Authorization: Bearer {{salesRepToken}}
 
 ### 7) Sales Rep gets a single product by id
-GET {{baseUrl}}/api/products/3
+GET {{baseUrl}}/api/products/00000000-0000-0000-0000-000000000000
 Authorization: Bearer {{salesRepToken}}
 
 ### 8) Sales Rep updates a product
-PUT {{baseUrl}}/api/products/3
+PUT {{baseUrl}}/api/products/00000000-0000-0000-0000-000000000000
 content-Type: application/json
 Authorization: Bearer {{salesRepToken}}
 
@@ -86,7 +86,7 @@ Authorization: Bearer {{salesRepToken}}
 }
 
 ### 9) Sales Rep deletes (soft-deletes) a product
-DELETE {{baseUrl}}/api/products/2
+DELETE {{baseUrl}}/api/products/00000000-0000-0000-0000-000000000000
 Authorization: Bearer {{salesRepToken}}
 
 ### 10) Sales Rep creates a customer
@@ -107,11 +107,11 @@ GET {{baseUrl}}/api/customers
 Authorization: Bearer {{salesRepToken}}
 
 ### 12) Sales Rep gets a single customer by id
-GET {{baseUrl}}/api/customers/1
+GET {{baseUrl}}/api/customers/00000000-0000-0000-0000-000000000000
 Authorization: Bearer {{salesRepToken}}
 
 ### 13) Sales Rep updates a customer
-PUT {{baseUrl}}/api/customers/1
+PUT {{baseUrl}}/api/customers/00000000-0000-0000-0000-000000000000
 content-Type: application/json
 Authorization: Bearer {{salesRepToken}}
 
@@ -124,7 +124,7 @@ Authorization: Bearer {{salesRepToken}}
 }
 
 ### 14) Sales Rep deletes (soft-deletes) a customer
-DELETE {{baseUrl}}/api/customers/1
+DELETE {{baseUrl}}/api/customers/00000000-0000-0000-0000-000000000000
 Authorization: Bearer {{salesRepToken}}
 
 ### 15) List archived (soft-deleted) products
@@ -132,11 +132,11 @@ GET {{baseUrl}}/api/products/archived
 Authorization: Bearer {{salesRepToken}}
 
 ### 16) Restore an archived product
-POST {{baseUrl}}/api/products/1/restore
+POST {{baseUrl}}/api/products/00000000-0000-0000-0000-000000000000/restore
 Authorization: Bearer {{salesRepToken}}
 
 ### 17) Permanently delete a product (irreversible)
-DELETE {{baseUrl}}/api/products/1/permanent
+DELETE {{baseUrl}}/api/products/00000000-0000-0000-0000-000000000000/permanent
 Authorization: Bearer {{salesRepToken}}
 
 ### 18) List archived (soft-deleted) customers
@@ -144,11 +144,11 @@ GET {{baseUrl}}/api/customers/archived
 Authorization: Bearer {{salesRepToken}}
 
 ### 19) Restore an archived customer
-POST {{baseUrl}}/api/customers/1/restore
+POST {{baseUrl}}/api/customers/00000000-0000-0000-0000-000000000000/restore
 Authorization: Bearer {{salesRepToken}}
 
 ### 20) Permanently delete a customer (irreversible)
-DELETE {{baseUrl}}/api/customers/1/permanent
+DELETE {{baseUrl}}/api/customers/00000000-0000-0000-0000-000000000000/permanent
 Authorization: Bearer {{salesRepToken}}
 
 ### 21) Sales Rep creates an order (invoice) with line items and a discount
@@ -157,13 +157,12 @@ content-Type: application/json
 Authorization: Bearer {{salesRepToken}}
 
 {
-  "CustomerId":1,
+  "CustomerId":"00000000-0000-0000-0000-000000000000",
   "DueDate":"2026-08-01",
   "Discount":10,
   "Notes":"Test order",
   "Items":[
-    {"ProductId":1,"Quantity":2},
-    {"ProductId":2,"Quantity":1}
+    {"ProductId":"00000000-0000-0000-0000-000000000000","Quantity":2}
   ]
 }
 
@@ -181,58 +180,54 @@ content-Type: application/json
 Authorization: Bearer {{salesRepToken}}
 
 {
-  "CustomerId":1,
+  "CustomerId":"00000000-0000-0000-0000-000000000000",
   "DueDate":"2026-08-15",
   "Discount":0,
   "Notes":"Updated order",
   "Items":[
-    {"ProductId":1,"Quantity":1}
+    {"ProductId":"00000000-0000-0000-0000-000000000000","Quantity":1}
   ]
 }
 
-### 25) Add a payment to an order
-POST {{baseUrl}}/api/orders/00000000-0000-0000-0000-000000000000/payments
+### 25) Record a payment against an order (directly updates PaidAmount, no payment history is kept)
+POST {{baseUrl}}/api/orders/00000000-0000-0000-0000-000000000000/record-payment
 content-Type: application/json
 Authorization: Bearer {{salesRepToken}}
 
 {
-  "Amount":30,
-  "Notes":"Cash"
+  "Amount":30
 }
 
-### 26) List payments for an order
-GET {{baseUrl}}/api/orders/00000000-0000-0000-0000-000000000000/payments
+### 26) Delete an order (permanent, cascades to its line items)
+# WARNING: irreversible. The sales rep is responsible for this decision.
+DELETE {{baseUrl}}/api/orders/00000000-0000-0000-0000-000000000000
 Authorization: Bearer {{salesRepToken}}
 
-### 27) Delete a payment (e.g. entered by mistake)
-DELETE {{baseUrl}}/api/orders/00000000-0000-0000-0000-000000000000/payments/1
-Authorization: Bearer {{salesRepToken}}
-
-### 28) Dashboard summary (all time)
+### 27) Dashboard summary (all time)
 GET {{baseUrl}}/api/orders/summary
 Authorization: Bearer {{salesRepToken}}
 
-### 29) Dashboard summary (period-filtered: Week, Month, Year, or All)
+### 28) Dashboard summary (period-filtered: Week, Month, Year, or All)
 GET {{baseUrl}}/api/orders/summary?period=Month
 Authorization: Bearer {{salesRepToken}}
 
-### 30) Sales report (time-bucketed)
+### 29) Sales report (time-bucketed)
 GET {{baseUrl}}/api/reports/sales?period=Week
 Authorization: Bearer {{salesRepToken}}
 
-### 31) Items report (Most sold or Top value)
+### 30) Items report (Most sold or Top value)
 GET {{baseUrl}}/api/reports/items?period=All&sortBy=MostSold
 Authorization: Bearer {{salesRepToken}}
 
-### 32) Clients report (Most invoices or Top value)
+### 31) Clients report (Most invoices or Top value)
 GET {{baseUrl}}/api/reports/clients?period=All&sortBy=MostInvoices
 Authorization: Bearer {{salesRepToken}}
 
-### 33) Get own profile (business name, logo, bank details)
+### 32) Get own profile (business name, logo, bank details)
 GET {{baseUrl}}/api/profile
 Authorization: Bearer {{salesRepToken}}
 
-### 34) Update bank details
+### 33) Update bank details
 PUT {{baseUrl}}/api/profile/bank-details
 content-Type: application/json
 Authorization: Bearer {{salesRepToken}}
@@ -243,11 +238,11 @@ Authorization: Bearer {{salesRepToken}}
   "IBAN":"JO71CAAB1234567890123456789012"
 }
 
-### 35) Logout (revokes the Sales Rep's active refresh token)
+### 34) Logout (revokes the Sales Rep's active refresh token)
 POST {{baseUrl}}/api/account/logout
 Authorization: Bearer {{salesRepToken}}
 
-### 36) Change password (while logged in)
+### 35) Change password (while logged in)
 POST {{baseUrl}}/api/account/change-password
 content-Type: application/json
 Authorization: Bearer {{salesRepToken}}
@@ -257,16 +252,16 @@ Authorization: Bearer {{salesRepToken}}
   "NewPassword":"NewPassword456"
 }
 
-### 37) Admin suspends a Sales Rep (blocks login, does NOT delete data)
+### 36) Admin suspends a Sales Rep (blocks login, does NOT delete data)
 POST {{baseUrl}}/api/users/00000000-0000-0000-0000-000000000000/suspend
 Authorization: Bearer {{adminToken}}
 
-### 38) Admin reactivates a suspended Sales Rep
+### 37) Admin reactivates a suspended Sales Rep
 POST {{baseUrl}}/api/users/00000000-0000-0000-0000-000000000000/activate
 Authorization: Bearer {{adminToken}}
 
-### 39) Sales Rep permanently deletes their own account (requires password confirmation)
-# WARNING: irreversible — cascades and removes all of this rep's Products/Customers/Orders/Payments/RefreshTokens.
+### 38) Sales Rep permanently deletes their own account (requires password confirmation)
+# WARNING: irreversible — cascades and removes all of this rep's Products/Customers/Orders/RefreshTokens.
 DELETE {{baseUrl}}/api/profile
 content-Type: application/json
 Authorization: Bearer {{salesRepToken}}

@@ -36,15 +36,15 @@ public class CustomersController(
         return Ok(result);
     }
 
-    [HttpGet("{id:int}")]
-    public async Task<IActionResult> GetById(int id)
+    [HttpGet("{id:guid}")]
+    public async Task<IActionResult> GetById(Guid id)
     {
         var result = await customerService.GetByIdAsync(User.GetUserId(), id);
         return Ok(result);
     }
 
-    [HttpPut("{id:int}")]
-    public async Task<IActionResult> Update(int id, UpdateCustomerRequest request)
+    [HttpPut("{id:guid}")]
+    public async Task<IActionResult> Update(Guid id, UpdateCustomerRequest request)
     {
         var validationResult = await updateValidator.ValidateAsync(request);
         if (!validationResult.IsValid)
@@ -56,8 +56,8 @@ public class CustomersController(
         return Ok(result);
     }
 
-    [HttpDelete("{id:int}")]
-    public async Task<IActionResult> Delete(int id)
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id)
     {
         await customerService.DeleteAsync(User.GetUserId(), id);
         return NoContent();
@@ -70,15 +70,15 @@ public class CustomersController(
         return Ok(result);
     }
 
-    [HttpPost("{id:int}/restore")]
-    public async Task<IActionResult> Restore(int id)
+    [HttpPost("{id:guid}/restore")]
+    public async Task<IActionResult> Restore(Guid id)
     {
         var result = await customerService.RestoreAsync(User.GetUserId(), id);
         return Ok(result);
     }
 
-    [HttpDelete("{id:int}/permanent")]
-    public async Task<IActionResult> PermanentDelete(int id)
+    [HttpDelete("{id:guid}/permanent")]
+    public async Task<IActionResult> PermanentDelete(Guid id)
     {
         await customerService.PermanentDeleteAsync(User.GetUserId(), id);
         return NoContent();
