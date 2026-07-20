@@ -14,6 +14,6 @@ public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         builder.Property(x => x.Name).IsRequired().HasColumnType("VARCHAR").HasMaxLength(20);
         builder.Property(x => x.PhoneNumber).IsRequired();
         builder.Property(x => x.StoreName).IsRequired(false);
-
+        builder.HasIndex(x => new { x.UserId, x.UpdatedAt });
     }
 }

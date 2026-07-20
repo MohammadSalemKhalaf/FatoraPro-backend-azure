@@ -5,7 +5,7 @@ using System.Text;
 
 namespace Fatora.DAL.Entites;
 
-public class Order
+public class Order : ISyncableEntity
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public required string InvoiceNumber { get; set; }
@@ -18,7 +18,8 @@ public class Order
     public decimal PaidAmount { get; set; }
     public decimal RemainingBalance => Total - PaidAmount;
 
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
     public DateOnly DueDate { get; set; }
 
 
