@@ -37,7 +37,7 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
         return customers.Select(ToResponse).ToList();
     }
 
-    public async Task<CustomerResponse> GetByIdAsync(Guid userId, int id)
+    public async Task<CustomerResponse> GetByIdAsync(Guid userId, Guid id)
     {
         var customer = await FindOwnedActiveCustomer(userId, id);
 
@@ -49,7 +49,7 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
         return ToResponse(customer);
     }
 
-    public async Task<CustomerResponse> UpdateAsync(Guid userId, int id, UpdateCustomerRequest request)
+    public async Task<CustomerResponse> UpdateAsync(Guid userId, Guid id, UpdateCustomerRequest request)
     {
         var customer = await FindOwnedActiveCustomer(userId, id);
 
@@ -69,7 +69,7 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
         return ToResponse(customer);
     }
 
-    public async Task DeleteAsync(Guid userId, int id)
+    public async Task DeleteAsync(Guid userId, Guid id)
     {
         var customer = await FindOwnedActiveCustomer(userId, id);
 
@@ -91,7 +91,7 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
         return customers.Select(ToResponse).ToList();
     }
 
-    public async Task<CustomerResponse> RestoreAsync(Guid userId, int id)
+    public async Task<CustomerResponse> RestoreAsync(Guid userId, Guid id)
     {
         var customer = await FindOwnedCustomer(userId, id);
 
@@ -106,7 +106,7 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
         return ToResponse(customer);
     }
 
-    public async Task PermanentDeleteAsync(Guid userId, int id)
+    public async Task PermanentDeleteAsync(Guid userId, Guid id)
     {
         var customer = await FindOwnedCustomer(userId, id);
 
@@ -119,10 +119,10 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
         await dbContext.SaveChangesAsync();
     }
 
-    private async Task<Customer?> FindOwnedActiveCustomer(Guid userId, int id) =>
+    private async Task<Customer?> FindOwnedActiveCustomer(Guid userId, Guid id) =>
         await dbContext.Customers.FirstOrDefaultAsync(c => c.Id == id && c.UserId == userId && c.IsActive);
 
-    private async Task<Customer?> FindOwnedCustomer(Guid userId, int id) =>
+    private async Task<Customer?> FindOwnedCustomer(Guid userId, Guid id) =>
         await dbContext.Customers.FirstOrDefaultAsync(c => c.Id == id && c.UserId == userId);
 
     private static CustomerResponse ToResponse(Customer customer) => new()

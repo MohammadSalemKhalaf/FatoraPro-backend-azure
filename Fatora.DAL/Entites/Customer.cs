@@ -7,7 +7,7 @@ namespace Fatora.DAL.Entites;
 
 public class Customer
 {
-    public int Id{ get; set; }
+    public Guid Id { get; set; } = Guid.NewGuid();
     public required string Name { get; set; }
     public string? StoreName { get; set; }
     public required string PhoneNumber { get; set; }

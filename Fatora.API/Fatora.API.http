@@ -69,11 +69,11 @@ GET {{baseUrl}}/api/products
 Authorization: Bearer {{salesRepToken}}
 
 ### 7) Sales Rep gets a single product by id
-GET {{baseUrl}}/api/products/3
+GET {{baseUrl}}/api/products/00000000-0000-0000-0000-000000000000
 Authorization: Bearer {{salesRepToken}}
 
 ### 8) Sales Rep updates a product
-PUT {{baseUrl}}/api/products/3
+PUT {{baseUrl}}/api/products/00000000-0000-0000-0000-000000000000
 content-Type: application/json
 Authorization: Bearer {{salesRepToken}}
 
@@ -86,7 +86,7 @@ Authorization: Bearer {{salesRepToken}}
 }
 
 ### 9) Sales Rep deletes (soft-deletes) a product
-DELETE {{baseUrl}}/api/products/2
+DELETE {{baseUrl}}/api/products/00000000-0000-0000-0000-000000000000
 Authorization: Bearer {{salesRepToken}}
 
 ### 10) Sales Rep creates a customer
@@ -107,11 +107,11 @@ GET {{baseUrl}}/api/customers
 Authorization: Bearer {{salesRepToken}}
 
 ### 12) Sales Rep gets a single customer by id
-GET {{baseUrl}}/api/customers/1
+GET {{baseUrl}}/api/customers/00000000-0000-0000-0000-000000000000
 Authorization: Bearer {{salesRepToken}}
 
 ### 13) Sales Rep updates a customer
-PUT {{baseUrl}}/api/customers/1
+PUT {{baseUrl}}/api/customers/00000000-0000-0000-0000-000000000000
 content-Type: application/json
 Authorization: Bearer {{salesRepToken}}
 
@@ -124,7 +124,7 @@ Authorization: Bearer {{salesRepToken}}
 }
 
 ### 14) Sales Rep deletes (soft-deletes) a customer
-DELETE {{baseUrl}}/api/customers/1
+DELETE {{baseUrl}}/api/customers/00000000-0000-0000-0000-000000000000
 Authorization: Bearer {{salesRepToken}}
 
 ### 15) List archived (soft-deleted) products
@@ -132,11 +132,11 @@ GET {{baseUrl}}/api/products/archived
 Authorization: Bearer {{salesRepToken}}
 
 ### 16) Restore an archived product
-POST {{baseUrl}}/api/products/1/restore
+POST {{baseUrl}}/api/products/00000000-0000-0000-0000-000000000000/restore
 Authorization: Bearer {{salesRepToken}}
 
 ### 17) Permanently delete a product (irreversible)
-DELETE {{baseUrl}}/api/products/1/permanent
+DELETE {{baseUrl}}/api/products/00000000-0000-0000-0000-000000000000/permanent
 Authorization: Bearer {{salesRepToken}}
 
 ### 18) List archived (soft-deleted) customers
@@ -144,11 +144,11 @@ GET {{baseUrl}}/api/customers/archived
 Authorization: Bearer {{salesRepToken}}
 
 ### 19) Restore an archived customer
-POST {{baseUrl}}/api/customers/1/restore
+POST {{baseUrl}}/api/customers/00000000-0000-0000-0000-000000000000/restore
 Authorization: Bearer {{salesRepToken}}
 
 ### 20) Permanently delete a customer (irreversible)
-DELETE {{baseUrl}}/api/customers/1/permanent
+DELETE {{baseUrl}}/api/customers/00000000-0000-0000-0000-000000000000/permanent
 Authorization: Bearer {{salesRepToken}}
 
 ### 21) Sales Rep creates an order (invoice) with line items and a discount
@@ -157,13 +157,12 @@ content-Type: application/json
 Authorization: Bearer {{salesRepToken}}
 
 {
-  "CustomerId":1,
+  "CustomerId":"00000000-0000-0000-0000-000000000000",
   "DueDate":"2026-08-01",
   "Discount":10,
   "Notes":"Test order",
   "Items":[
-    {"ProductId":1,"Quantity":2},
-    {"ProductId":2,"Quantity":1}
+    {"ProductId":"00000000-0000-0000-0000-000000000000","Quantity":2}
   ]
 }
 
@@ -181,12 +180,12 @@ content-Type: application/json
 Authorization: Bearer {{salesRepToken}}
 
 {
-  "CustomerId":1,
+  "CustomerId":"00000000-0000-0000-0000-000000000000",
   "DueDate":"2026-08-15",
   "Discount":0,
   "Notes":"Updated order",
   "Items":[
-    {"ProductId":1,"Quantity":1}
+    {"ProductId":"00000000-0000-0000-0000-000000000000","Quantity":1}
   ]
 }
 

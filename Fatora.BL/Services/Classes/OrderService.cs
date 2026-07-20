@@ -219,10 +219,10 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         return "Sent";
     }
 
-    private async Task<Customer?> FindOwnedActiveCustomer(Guid userId, int customerId) =>
+    private async Task<Customer?> FindOwnedActiveCustomer(Guid userId, Guid customerId) =>
         await dbContext.Customers.FirstOrDefaultAsync(c => c.Id == customerId && c.UserId == userId && c.IsActive);
 
-    private async Task<Dictionary<int, Product>?> LoadOwnedActiveProducts(Guid userId, List<OrderItemRequest> items)
+    private async Task<Dictionary<Guid, Product>?> LoadOwnedActiveProducts(Guid userId, List<OrderItemRequest> items)
     {
         var productIds = items.Select(i => i.ProductId).Distinct().ToList();
 
