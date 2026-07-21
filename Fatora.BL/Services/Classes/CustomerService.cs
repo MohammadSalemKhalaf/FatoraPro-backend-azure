@@ -133,6 +133,8 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
         PhoneNumber = customer.PhoneNumber,
         Street = customer.Street,
         City = customer.City,
-        IsActive = customer.IsActive
+        IsActive = customer.IsActive,
+        CreatedAt = customer.CreatedAt,
+        UpdatedAt = customer.UpdatedAt
     };
 }

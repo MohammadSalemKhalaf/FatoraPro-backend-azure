@@ -148,6 +148,8 @@ public class ProductService(AppDbContext dbContext) : IProductService
         ImageUrl = product.ImageUrl,
         PurchasePrice = product.PurchasePrice,
         SellPrice = product.SellPrice,
-        IsActive = product.IsActive
+        IsActive = product.IsActive,
+        CreatedAt = product.CreatedAt,
+        UpdatedAt = product.UpdatedAt
     };
 }

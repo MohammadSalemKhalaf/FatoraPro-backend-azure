@@ -5,7 +5,7 @@ using System.Text;
 
 namespace Fatora.DAL.Entites;
 
-public class Product
+public class Product : ISyncableEntity
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public required string Name { get; set; }
@@ -14,6 +14,8 @@ public class Product
     public decimal PurchasePrice { get; set; }
     public decimal SellPrice { get; set; }
     public bool IsActive { get; set; } = true;
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
 
     public Guid UserId { get; set; }
     public User User { get; set; }

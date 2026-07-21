@@ -14,5 +14,6 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
         builder.Navigation(x => x.OrderItems).AutoInclude();
         builder.Property(x => x.PaidAmount).HasDefaultValue(0m);
         builder.HasIndex(x => new { x.UserId, x.InvoiceNumber }).IsUnique();
+        builder.HasIndex(x => new { x.UserId, x.UpdatedAt });
     }
 }

@@ -253,6 +253,7 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         CustomerStreet = order.Customer.Street,
         CustomerCity = order.Customer.City,
         CreatedAt = order.CreatedAt,
+        UpdatedAt = order.UpdatedAt,
         DueDate = order.DueDate,
         Discount = order.Discount,
         Notes = order.Notes,
