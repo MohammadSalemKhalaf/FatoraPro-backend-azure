@@ -28,6 +28,7 @@ public class User
     public string? BankName { get; set; }
     public string? AccountNumber { get; set; }
     public string? IBAN { get; set; }
+    public int NextInvoiceNumber { get; set; } = 1;
 
 
     public List<Product> Items { get; set; } = new List<Product>();

@@ -294,7 +294,12 @@ public class SyncService(AppDbContext dbContext) : ISyncService
 
     private async Task<string> GenerateInvoiceNumberAsync(Guid userId)
     {
-        var count = await dbContext.Orders.CountAsync(o => o.UserId == userId);
-        return $"INV-{count + 1:D4}";
+        // A running per-user counter, not a COUNT of existing orders - orders can now be permanently
+        // deleted, and counting would reissue an already-used invoice number as soon as any order
+        // was removed from the middle or end of the sequence, colliding with the unique index.
+        var user = await dbContext.Users.FirstAsync(u => u.Id == userId);
+        var invoiceNumber = $"INV-{user.NextInvoiceNumber:D4}";
+        user.NextInvoiceNumber++;
+        return invoiceNumber;
     }
 }

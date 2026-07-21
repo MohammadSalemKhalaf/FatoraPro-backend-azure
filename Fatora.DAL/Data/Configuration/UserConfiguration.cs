@@ -21,6 +21,7 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
 
         builder.Property(x=>x.Role).HasConversion<string>();
         builder.Property(x => x.IsActive).HasDefaultValue(true);
+        builder.Property(x => x.NextInvoiceNumber).HasDefaultValue(1);
         builder.HasIndex(x=>x.UserName).IsUnique();
         
     }
