@@ -5,8 +5,18 @@ namespace Fatora.API.Validators.SyncValidators;
 
 public class SyncPushRequestValidator : AbstractValidator<SyncPushRequest>
 {
+    // A single sync batch is expected to hold a rep's pending offline work (typically tens of
+    // records) - not the whole database. This bounds request size/time without ever being a real
+    // limit for the intended usage.
+    private const int MaxItemsPerBatch = 500;
+
     public SyncPushRequestValidator()
     {
+        RuleFor(x => x).Must(HaveAReasonableBatchSize)
+            .WithMessage($"A single sync batch cannot exceed {MaxItemsPerBatch} total items. Split into multiple pushes.");
+
+        RuleForEach(x => x.DeletedOrderIds).NotEqual(Guid.Empty);
+
         RuleForEach(x => x.Customers).ChildRules(customer =>
         {
             customer.RuleFor(c => c.Id).NotEqual(Guid.Empty);
@@ -39,5 +49,16 @@ public class SyncPushRequestValidator : AbstractValidator<SyncPushRequest>
                 item.RuleFor(i => i.UnitPrice).GreaterThan(0);
             });
         });
+    }
+
+    private static bool HaveAReasonableBatchSize(SyncPushRequest request)
+    {
+        var total = request.Customers.Count
+            + request.Products.Count
+            + request.Orders.Count
+            + request.Orders.Sum(o => o.Items.Count)
+            + request.DeletedOrderIds.Count;
+
+        return total <= MaxItemsPerBatch;
     }
 }
