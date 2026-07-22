@@ -2,35 +2,32 @@
 
 Fatora is a backend API for small businesses and their sales representatives to manage customers, products, invoices, and payment collection — without the overhead of a full accounting/ERP system.
 
-It is intentionally simple: fast to use in the field, easy to reason about, and free of features (tax engines, multi-currency, double-entry bookkeeping) that a small business selling in a single currency, in person, does not need.
+It is intentionally simple: fast to use in the field, and free of features (tax engines, multi-currency, double-entry bookkeeping) that a small business selling in a single currency, in person, does not need.
 
 ---
 
 ## Table of Contents
 
-- [Who this is for](#who-this-is-for)
+- [Who This Is For](#who-this-is-for)
 - [Tech Stack](#tech-stack)
 - [Architecture](#architecture)
 - [Project Structure](#project-structure)
-- [Key Business Rules & Design Decisions](#key-business-rules--design-decisions)
+- [Key Business Rules](#key-business-rules)
 - [Getting Started](#getting-started)
 - [Authentication & Roles](#authentication--roles)
 - [Features](#features)
 - [API Reference](#api-reference)
 - [Offline-First Sync](#offline-first-sync)
-- [End-to-End Example Flow](#end-to-end-example-flow)
-- [Maintaining This Document](#maintaining-this-document)
+- [End-to-End Example](#end-to-end-example)
 
 ---
 
-## Who this is for
+## Who This Is For
 
-Fatora targets a specific, concrete business model — not a generic invoicing product:
-
-- An **Admin** owns the business relationship. They visit shops in person, create a **Sales Rep** account for each one, and get paid directly by that shop (cash, outside the app) — there is no in-app subscription billing or payment processing.
-- Each **Sales Rep** runs their own book of customers, products, and invoices. Data is strictly scoped per rep — one rep never sees another rep's data, and the Admin's role is account management (create/suspend/reactivate), not day-to-day data access.
-- All money is in a single currency (**ILS**) with **no tax** — this was a deliberate, explicit decision, not an oversight. Do not reintroduce currency or tax fields without a new, explicit business decision.
-- The app favors **speed and simplicity** over completeness. When a design choice had to pick between "accounting-grade correctness" and "fast, simple, good enough for a small shop," it picked the latter — see [Key Business Rules](#key-business-rules--design-decisions) below for the concrete trade-offs this produced.
+- An **Admin** owns the business relationship: creates a **Sales Rep** account for each shop in person, and is paid directly by that shop (cash, outside the app) — there is no in-app billing.
+- Each **Sales Rep** manages their own customers, products, and invoices. Data is strictly scoped per rep; the Admin's role is account management only, not day-to-day data access.
+- All money is a single currency (**ILS**), with no tax support.
+- The app favors speed and simplicity over full accounting-grade correctness.
 
 ---
 
@@ -39,37 +36,35 @@ Fatora targets a specific, concrete business model — not a generic invoicing p
 | Layer | Technology |
 |---|---|
 | Runtime | .NET 10 |
-| API | ASP.NET Core Web API (controllers, not Minimal API) |
+| API | ASP.NET Core Web API |
 | ORM | Entity Framework Core 10 |
 | Database | PostgreSQL (via Npgsql) |
 | Auth | JWT Bearer tokens + rotating refresh tokens |
-| Password hashing | `PasswordHasher<T>` (ASP.NET Core Identity primitive, not the full Identity system) |
-| Validation | FluentValidation (explicitly invoked per action) + DataAnnotations |
-| Error handling | Custom exception hierarchy + `IExceptionHandler` → RFC 7807 `ProblemDetails` |
-| File storage | Local disk (`wwwroot/uploads`), not cloud |
+| Password hashing | `PasswordHasher<T>` |
+| Validation | FluentValidation + DataAnnotations |
+| Error handling | Custom exception hierarchy → RFC 7807 `ProblemDetails` |
+| File storage | Local disk (`wwwroot/uploads`) |
 
 ---
 
 ## Architecture
 
-Fatora follows a strict 3-layer architecture with a one-way dependency rule:
+A strict 3-layer architecture with a one-way dependency rule:
 
 ```
 Fatora.API  →  Fatora.BL  →  Fatora.DAL
 (HTTP layer)   (business logic)  (data access / entities)
 ```
 
-- **Fatora.DAL** — EF Core entities, `AppDbContext`, entity type configurations, migrations. Knows nothing about HTTP or business rules.
-- **Fatora.BL** — Services (business logic), DTOs (requests/responses), custom exceptions. Depends on DAL, never on API.
-- **Fatora.API** — Controllers, validators, file storage, JWT configuration, `Program.cs`. The only layer that knows about HTTP.
+- **Fatora.DAL** — EF Core entities, `AppDbContext`, entity configurations, migrations.
+- **Fatora.BL** — Services (business logic), DTOs, custom exceptions. Depends on DAL, never on API.
+- **Fatora.API** — Controllers, validators, file storage, JWT configuration.
 
-This direction is enforced deliberately — DAL must never reference BL. (Earlier in the project, `SeedData` was moved from DAL to `Fatora.BL/Utils` specifically to fix a circular reference that violated this rule.)
+**Multi-tenancy**: every domain entity carries a `UserId`. Every service call filters and verifies ownership on every read and write. Cross-tenant access returns `404`, never `403`, to avoid confirming a record's existence to someone who doesn't own it.
 
-**Multi-tenancy**: every domain entity carries a `UserId`. Every service method takes the authenticated user's ID and filters/verifies ownership on every read and write. Cross-tenant access returns `404 Not Found`, never `403 Forbidden` — this avoids leaking whether a record exists at all to someone who doesn't own it.
+**Error handling**: business-rule violations throw typed exceptions (`NotFoundException`, `ConflictException`, `UnauthorizedException`, `BadRequestException`), caught centrally by `GlobalExceptionHandler` and translated into `ProblemDetails`. Controllers never catch exceptions themselves.
 
-**Error handling**: business-rule violations throw typed exceptions (`NotFoundException`, `ConflictException`, `UnauthorizedException`, `BadRequestException`, all deriving from `AppException`), caught centrally by `GlobalExceptionHandler` and translated into `ProblemDetails` responses with the correct HTTP status code. Controllers do not catch exceptions themselves.
-
-**Authentication**: login issues a short-lived JWT access token plus a longer-lived refresh token. Only one active refresh token exists per user at a time (rotation, not multiple concurrent sessions). Roles (`Admin`, `SalesRep`) are enforced via `[Authorize(Roles = "...")]`.
+**Authentication**: login issues a short-lived JWT access token plus a longer-lived refresh token. Only one active refresh token exists per user (rotation, not concurrent sessions). Roles (`Admin`, `SalesRep`) are enforced via `[Authorize(Roles = "...")]`.
 
 ---
 
@@ -88,7 +83,7 @@ Fatora.API/
 Fatora.BL/
   Services/
     Abstractions/         Interfaces (IOrderService, IUserService, ...)
-    Classes/               Implementations — where business rules actually live
+    Classes/               Implementations
   DTOs/
     Requests/              Inbound request shapes
     Responses/             Outbound response shapes
@@ -105,20 +100,18 @@ Fatora.DAL/
 
 ---
 
-## Key Business Rules & Design Decisions
+## Key Business Rules
 
-These are decisions that were deliberately made after discussion, not defaults — future work should not silently reverse them without a new explicit conversation:
-
-- **No tax, single currency (ILS).** Rejected explicitly and repeatedly. Do not add tax fields.
-- **Username/password auth only — no email required, no social login.** Many users don't have/use email.
-- **Orders (invoices) have no separate `Payment` ledger entity.** `Order.PaidAmount` is a single stored, mutable field, directly incremented by `POST /api/orders/{id}/record-payment`. There is intentionally **no history of individual payment events** (no dates/notes per payment) — this app is not an accounting system. `Status` (`Sent` / `PartiallyPaid` / `Paid` / `Overdue`) is computed on read from `PaidAmount`, `Total`, and `DueDate` — never stored.
-- **Orders can be permanently deleted by the owning Sales Rep**, cascading to their line items. This is a conscious trade-off: the rep is trusted and responsible for this decision; the app prioritizes an uncluttered invoice list over permanent audit history. (`Customer`/`Product` deletion is soft — see below — but `Order` deletion is hard, because there is no longer any child ledger record whose integrity needs protecting.)
-- **`Customer` and `Product` use soft-delete** (`IsActive` flag, with `archive` / `restore` / `permanent-delete` endpoints). `Order` does not need this pattern since it has no undeletable children anymore.
-- **Self-account-deletion vs. Admin-suspend are different, deliberate concepts:** a Sales Rep can permanently delete their *own* account (password-confirmed, full cascade — a security/exit decision). An Admin can only *suspend/reactivate* a rep's account (blocks login, keeps all data) — reserved for future subscription/access-control needs, not a substitute for deletion.
-- **User-enumeration is explicitly guarded against** on login: a wrong username and a wrong password return the identical `401` message. Do not "improve" this by giving more specific error messages per case — that was a fixed vulnerability, not an oversight.
-- **Money-sensitive fields are frozen at creation time.** `OrderItem.UnitPrice` is a snapshot of the product's price *at the moment the invoice was created* — it must never silently track later changes to `Product.SellPrice`.
-- **`Customer.Id`, `Product.Id`, and `OrderItem.Id` are `Guid`, not auto-increment `int`.** This is required for offline-first support: the mobile app must be able to generate a globally-unique id for a new customer/product while it has no network connection at all. `Order.Id` was already `Guid` from the start. `User.Id`/`RefreshToken.Id` stayed as they were — users are never created offline (Admin-only, always online) and refresh tokens never touch the mobile client's local storage.
-- **Every syncable entity (`Customer`, `Product`, `Order`) tracks `CreatedAt`/`UpdatedAt`, stamped centrally** by `AppDbContext.SaveChanges` via the `ISyncableEntity` marker interface — never set manually in a service, so it can't be forgotten. See [Offline-First Sync](#offline-first-sync) for why this exists.
+- **No tax, single currency (ILS).**
+- **Username/password auth only** — no email, no social login.
+- **No separate `Payment` ledger.** `Order.PaidAmount` is a single stored field, updated via `POST /api/orders/{id}/record-payment`. No history of individual payment events is kept. `Status` (`Sent` / `PartiallyPaid` / `Paid` / `Overdue`) is computed on read from `PaidAmount`, `Total`, and `DueDate`.
+- **Orders can be permanently deleted** by the owning Sales Rep, cascading to their line items — the app favors an uncluttered invoice list over permanent audit history.
+- **`Customer` and `Product` use soft-delete** (`IsActive`, with archive/restore/permanent-delete). `Order` deletion is hard, since it has no child records to protect.
+- **Self-delete vs. Admin-suspend are distinct.** A Sales Rep can permanently delete their own account (password-confirmed, full cascade). An Admin can only suspend/reactivate a rep's account (blocks login, keeps all data) — reserved for future access-control needs.
+- **Login is enumeration-safe**: a wrong username and a wrong password return the identical `401` message.
+- **Money fields are frozen at creation time.** `OrderItem.UnitPrice` snapshots the product's price at invoice creation and never tracks later `Product.SellPrice` changes.
+- **`Customer.Id`, `Product.Id`, and `OrderItem.Id` are `Guid`**, generated client-side, to support offline creation. `Order.Id` was already `Guid`. `User.Id`/`RefreshToken.Id` remain server-only concerns.
+- **`Customer`, `Product`, and `Order` track `CreatedAt`/`UpdatedAt`**, stamped centrally by `AppDbContext.SaveChanges` — never set manually in a service.
 
 ---
 
@@ -132,17 +125,17 @@ These are decisions that were deliberately made after discussion, not defaults �
 ### Setup
 
 1. Clone the repository.
-2. Configure the connection string in `Fatora.API/appsettings.json` (`ConnectionStrings:DefaultConnection`) and, in a real deployment, replace `JwtSettings:SecretKey` with a secret pulled from environment/secret storage rather than committed to source.
-3. Apply database migrations and seed the initial Admin account + roles — this happens automatically on startup (`Program.cs` calls `dbContext.Database.MigrateAsync()` and `SeedData.seedAuthDataAysnc`), so you just need to run the app:
+2. Configure the connection string in `Fatora.API/appsettings.json` (`ConnectionStrings:DefaultConnection`). In production, `JwtSettings:SecretKey` should come from environment/secret storage, not source control.
+3. Run the app — migrations and seed data (roles + initial Admin account) apply automatically on startup:
    ```bash
    cd Fatora.API
    dotnet run
    ```
-4. By default this binds to `http://0.0.0.0:5050` (all network interfaces), so it's reachable both from `localhost` and from another device on the same network (e.g. a phone running the Flutter app over Wi-Fi) — useful for mobile development without HTTPS certificate friction. `GET /health` should return `{"message":"all up"}`.
+4. Binds to `http://0.0.0.0:5050` by default (all network interfaces), reachable from `localhost` or another device on the same network. `GET /health` should return `{"message":"all up"}`.
 
-### Testing endpoints
+### Testing Endpoints
 
-`Fatora.API/Fatora.API.http` contains a maintained, numbered list of example requests for every endpoint in the API — use it (via the REST Client extension in VS Code, or Rider's built-in HTTP client) as the fastest way to explore or manually verify behavior.
+`Fatora.API/Fatora.API.http` contains a numbered example request for every endpoint — usable directly via the REST Client extension in VS Code, or Rider's built-in HTTP client.
 
 ---
 
@@ -150,35 +143,35 @@ These are decisions that were deliberately made after discussion, not defaults �
 
 Two roles exist: `Admin` and `SalesRep`.
 
-- There is exactly **one** Admin account, created by database seed on first run.
-- The Admin creates `SalesRep` accounts via `POST /api/users/sales-reps` — sales reps cannot self-register.
-- Every other business endpoint (`Customers`, `Products`, `Orders`, `Reports`, `Profile`) is `[Authorize(Roles = "SalesRep")]` — the Admin does not use these day-to-day; their job is account lifecycle management only.
+- There is exactly one Admin account, created by database seed on first run.
+- The Admin creates `SalesRep` accounts via `POST /api/users/sales-reps` — reps cannot self-register.
+- Every other business endpoint (`Customers`, `Products`, `Orders`, `Reports`, `Profile`, `Sync`) is `[Authorize(Roles = "SalesRep")]`.
 
-Login (`POST /api/account/login`) returns a JWT access token (short-lived) and a refresh token (longer-lived). Use `POST /api/account/refresh-token` to get a new pair when the access token expires. `POST /api/account/logout` revokes the current refresh token immediately.
+Login (`POST /api/account/login`) returns a JWT access token and a refresh token. `POST /api/account/refresh-token` rotates them. `POST /api/account/logout` revokes the current refresh token immediately.
 
 ---
 
 ## Features
 
-- **Auth**: login, refresh-token rotation, logout, change-password (revokes refresh tokens), self-delete-account (password-confirmed, full cascade).
+- **Auth**: login, refresh-token rotation, logout, change-password, self-delete-account.
 - **Admin**: create Sales Rep accounts, suspend/reactivate accounts.
 - **Products**: CRUD, image upload, soft-delete/archive/restore/permanent-delete.
 - **Customers**: CRUD, soft-delete/archive/restore/permanent-delete.
-- **Orders (Invoices)**: create/update/delete (cascade), computed `Status`, record payments, sequential per-rep invoice numbering (`INV-0001`, ...).
-- **Dashboard**: order summary (count/total/paid/outstanding by status) filterable by Week/Month/Year/All.
-- **Reports**: sales-over-time, items breakdown (most sold / top value), clients breakdown (most invoices / top value).
-- **Profile**: business name, logo upload, bank details (for customers to transfer payment to).
-- **Offline sync**: batch push (upload locally-made changes) and pull (delta download) so the mobile app keeps working with no connection — see [Offline-First Sync](#offline-first-sync).
+- **Orders (Invoices)**: create/update/delete, computed status, record payments, sequential per-rep invoice numbering (`INV-0001`, ...).
+- **Dashboard**: order summary (count/total/paid/outstanding by status), filterable by period.
+- **Reports**: sales-over-time, items breakdown, clients breakdown.
+- **Profile**: business name, logo, bank details.
+- **Offline sync**: batch push/pull so the mobile app works with no connection.
 
 ---
 
 ## API Reference
 
-This is a quick map of controllers and their base routes — see `Fatora.API.http` for the full, concrete, numbered request list.
+Quick map of controllers — see `Fatora.API.http` for the full request list.
 
 | Controller | Base route | Notes |
 |---|---|---|
-| `AccountController` | `/api/account` | `login`, `refresh-token` (anonymous); `logout`, `change-password` (authenticated) |
+| `AccountController` | `/api/account` | `login`, `refresh-token` (anonymous); `logout`, `change-password` |
 | `UsersController` | `/api/users` | Admin-only: `sales-reps` (create), `{id}/suspend`, `{id}/activate` |
 | `ProfileController` | `/api/profile` | Get profile, logo upload, bank details, self-delete |
 | `CustomersController` | `/api/customers` | Full CRUD + archive/restore/permanent-delete |
@@ -191,98 +184,61 @@ This is a quick map of controllers and their base routes — see `Fatora.API.htt
 
 ## Offline-First Sync
 
-The mobile app must keep working with no internet connection — create/edit customers, products, and invoices offline, then reconcile with the server once connectivity returns. This section is the contract between the two sides.
+**Why `Guid` ids**: a device generates its own id for anything created offline, since it cannot ask the server for the next id without a connection. That's why `Customer`, `Product`, `Order`, and `OrderItem` all use `Guid` keys.
 
-**Why `Guid` ids matter**: a device generates its own id for anything it creates offline (`Guid.NewGuid()`, client-side), since it cannot ask the server "what's the next id?" without a connection. This is *why* `Customer`, `Product`, `Order`, and `OrderItem` all use `Guid` primary keys.
+**Push** — `POST /api/sync/push`: the device sends every locally-pending change in one batch, each item carrying its client-generated id and the real device-side edit timestamp (`UpdatedAt`). The server responds per-item (`Applied`, `Conflict`, `Rejected`, or `Deleted`) — one bad record never blocks the rest of the batch.
 
-**Push** — `POST /api/sync/push`: the device sends every locally-pending change in one batch (`Customers`, `Products`, `Orders` with their `Items`, plus `DeletedOrderIds`). Each item carries the id the device generated and the real timestamp of when the edit happened *on the device* (`UpdatedAt`) — not when it reaches the server. The server responds with a per-item result (`Applied`, `Conflict`, `Rejected`, or `Deleted`) so a single bad record never blocks the rest of the batch — every item is validated and saved independently.
+**Pull** — `GET /api/sync/pull?since={timestamp}`: returns everything changed for that user since the given time, plus the server's own clock (`serverTime`), which the client stores as the watermark for its next pull.
 
-**Pull** — `GET /api/sync/pull?since={timestamp}`: returns everything for that user with `UpdatedAt` newer than `since`, plus the server's own clock (`serverTime`). The client must store `serverTime` — not its own clock — as the watermark for its *next* pull, to avoid clock-skew bugs between devices.
+**Conflicts resolve last-write-wins by `UpdatedAt`.** An incoming edit older than or equal to the server's copy is rejected as a `Conflict`; the device should pull to reconcile. This assumes one device per rep, not conflict-free multi-device merging.
 
-**Conflict resolution is last-write-wins by `UpdatedAt`.** If the incoming edit's timestamp is older than or equal to what the server already has, the push is rejected as a `Conflict` and the server's version is kept untouched — the device should pull to reconcile. This is a deliberate, simple choice for a single-device-per-rep app; it is not conflict-free merging and was never meant to be.
+**Invoice numbers are always assigned server-side**, at the moment an order is pushed — never by the device.
 
-**Invoice numbers are always assigned by the server**, at the moment a new order is pushed — never by the device. A rep creating an invoice offline sees it locally without its real `INV-XXXX` number until the next successful sync.
-
-**Orders deleted offline** are communicated via `DeletedOrderIds` in the push payload and hard-deleted server-side (matching the existing "reps can permanently delete their own invoices" rule). There is deliberately no delete-tombstone in the *pull* response — with one device per rep, the device that deleted something already knows it did; this would need revisiting if multi-device-per-rep is ever supported.
-
-**Why the timestamp auto-stamping has an escape hatch**: `AppDbContext` normally stamps `UpdatedAt = now()` on every save (see Key Business Rules). The sync push path needs to preserve the *device's* original edit time instead, so it sets `AppDbContext.SuppressAutoTimestamps = true` for the duration of the push and manages `CreatedAt`/`UpdatedAt` itself from the payload.
+**Orders deleted offline** are sent via `DeletedOrderIds` in the push payload and hard-deleted server-side. There is no delete-tombstone in the pull response — this would need revisiting if multi-device-per-rep is ever supported.
 
 ---
 
-## End-to-End Example Flow
+## End-to-End Example
 
-A concrete walkthrough of the whole system, start to finish — this is what "using Fatora" actually looks like.
-
-**1. Admin creates a Sales Rep** (one-time, in person, when onboarding a new shop):
+**1. Admin creates a Sales Rep:**
 ```
 POST /api/users/sales-reps
 Authorization: Bearer <admin-token>
 { "UserName": "khalil_shop", "Password": "...", "Name": "Khalil", "PhoneNumber": "...", "City": "Amman", "Street": "..." }
 ```
 
-**2. The rep logs in** on their phone:
+**2. The rep logs in:**
 ```
 POST /api/account/login
 { "UserName": "khalil_shop", "Password": "..." }
 → { "accessToken": "...", "refreshToken": "...", "expires": "..." }
 ```
 
-**3. The rep adds a customer:**
+**3. The rep adds a customer and a product:**
 ```
 POST /api/customers
 { "Name": "Abu Ahmad", "PhoneNumber": "...", "Street": "...", "City": "..." }
-```
 
-**4. The rep adds a product to their catalog:**
-```
 POST /api/products
 { "Name": "Widget", "PurchasePrice": 5, "SellPrice": 15 }
 ```
 
-**5. The rep creates an invoice** for that customer with line items (`CustomerId`/`ProductId` are the `Guid`s returned when each was created):
+**4. The rep creates an invoice** (`CustomerId`/`ProductId` are the `Guid`s from above):
 ```
 POST /api/orders
 { "CustomerId": "<customer-guid>", "DueDate": "2026-08-15", "Discount": 0, "Items": [ { "ProductId": "<product-guid>", "Quantity": 3 } ] }
 → Status: "Sent", Total: 45, PaidAmount: 0
 ```
-`OrderItem.UnitPrice` is frozen at 15 the moment this is created — later changes to the product's `SellPrice` never retroactively affect this invoice.
 
-**6. The customer pays part of it later; the rep records it:**
+**5. Payments are recorded as they come in:**
 ```
 POST /api/orders/{id}/record-payment
 { "Amount": 20 }
-→ Status: "PartiallyPaid", PaidAmount: 20, RemainingBalance: 25
+→ Status: "PartiallyPaid", RemainingBalance: 25
 ```
 
-**7. The customer pays the rest:**
-```
-POST /api/orders/{id}/record-payment
-{ "Amount": 25 }
-→ Status: "Paid", RemainingBalance: 0
-```
-
-**8. The rep checks their dashboard** at any point:
+**6. The rep checks their dashboard or pulls a report:**
 ```
 GET /api/orders/summary?period=Month
-→ { "count": ..., "totalAmount": ..., "totalPaid": ..., "totalOutstanding": ..., "paidCount": ..., "overdueCount": ... }
-```
-
-**9. If an invoice was created by mistake or is no longer needed, the rep deletes it** — permanently, cascading to its items:
-```
-DELETE /api/orders/{id}
-→ 204 No Content
-```
-
-**10. At the end of a busy week, the rep pulls a report:**
-```
 GET /api/reports/clients?period=Week&sortBy=TopValue
-→ [ { "customerId": "<customer-guid>", "customerName": "Abu Ahmad", "invoiceCount": 4, "totalValue": 320 }, ... ]
 ```
-
----
-
-## Maintaining This Document
-
-**This README must be kept up to date.** Whenever a feature is added, changed, or removed, the relevant section here (Features, API Reference, Key Business Rules, and the example flow if it's affected) should be updated in the same body of work — not as a separate, later cleanup task.
-
-The goal is that this file alone — read top to bottom — gives an accurate, current picture of what the system does and why, for a new engineer or an AI coding assistant picking up the project cold.
