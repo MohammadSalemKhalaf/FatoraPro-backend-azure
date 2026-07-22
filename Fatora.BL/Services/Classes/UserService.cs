@@ -87,6 +87,22 @@ public class UserService(AppDbContext dbContext, IPasswordHasherService password
         return ToResponse(user);
     }
 
+    public async Task<List<AdminUserResponse>> GetUsersAsync(string? search)
+    {
+        var query = dbContext.Users.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            query = query.Where(u =>
+                EF.Functions.ILike(u.UserName, $"%{search}%") ||
+                EF.Functions.ILike(u.PhoneNumber, $"%{search}%"));
+        }
+
+        var users = await query.ToListAsync();
+
+        return users.Select(ToAdminResponse).ToList();
+    }
+
     public async Task<UserResponse> GetProfileAsync(Guid userId)
     {
         var user = await FindUser(userId);
@@ -143,6 +159,18 @@ public class UserService(AppDbContext dbContext, IPasswordHasherService password
         {
             throw new UnauthorizedException("Current password is incorrect.");
         }
+
+        user.Password = passwordHasher.Hash(user, newPassword);
+
+        var refreshTokens = await dbContext.RefreshTokens.Where(r => r.UserId == userId).ToListAsync();
+        dbContext.RefreshTokens.RemoveRange(refreshTokens);
+
+        await dbContext.SaveChangesAsync();
+    }
+
+    public async Task ResetPasswordAsync(Guid userId, string newPassword)
+    {
+        var user = await FindUser(userId);
 
         user.Password = passwordHasher.Hash(user, newPassword);
 
@@ -211,6 +239,19 @@ public class UserService(AppDbContext dbContext, IPasswordHasherService password
         SubscriptionType.Annual => start.AddDays(365),
         SubscriptionType.Lifetime => null,
         _ => throw new ArgumentOutOfRangeException(nameof(type))
+    };
+
+    private static AdminUserResponse ToAdminResponse(User user) => new()
+    {
+        Id = user.Id,
+        UserName = user.UserName,
+        PhoneNumber = user.PhoneNumber,
+        Role = user.Role.ToString(),
+        IsActive = user.IsActive,
+        SubscriptionType = user.SubscriptionType.ToString(),
+        SubscriptionStart = user.SubscriptionStart,
+        SubscriptionEnd = user.SubscriptionEnd,
+        AccountStatus = ComputeAccountStatus(user)
     };
 
     private static UserResponse ToResponse(User user) => new()

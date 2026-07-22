@@ -18,7 +18,10 @@ public class AccountController(
     LoginRequestValidator loginRequestValidator,
     RefreshTokenValidator refreshTokenValidator,
     ChangePasswordRequestValidator changePasswordValidator,
-    RegisterRequestValidator registerRequestValidator) : ControllerBase
+    RegisterRequestValidator registerRequestValidator,
+    IAdminRecoveryService adminRecoveryService,
+    AdminForgotPasswordRequestValidator forgotPasswordValidator,
+    AdminResetPasswordRequestValidator adminResetPasswordValidator) : ControllerBase
 {
     [HttpPost("register")]
     public async Task<IActionResult> Register(RegisterRequest request)
@@ -78,6 +81,34 @@ public class AccountController(
         }
 
         await userService.ChangePasswordAsync(User.GetUserId(), request.CurrentPassword, request.NewPassword);
+        return NoContent();
+    }
+
+    [HttpPost("forgot-password")]
+    public async Task<IActionResult> ForgotPassword(AdminForgotPasswordRequest request)
+    {
+        var validationResult = await forgotPasswordValidator.ValidateAsync(request);
+        if (!validationResult.IsValid)
+        {
+            return BadRequest(validationResult.Errors);
+        }
+
+        // Always the same response whether or not the username exists/is an Admin -
+        // the actual OTP only gets generated and emailed when it is.
+        await adminRecoveryService.RequestPasswordResetAsync(request.UserName);
+        return NoContent();
+    }
+
+    [HttpPost("reset-password")]
+    public async Task<IActionResult> ResetPasswordWithOtp(AdminResetPasswordRequest request)
+    {
+        var validationResult = await adminResetPasswordValidator.ValidateAsync(request);
+        if (!validationResult.IsValid)
+        {
+            return BadRequest(validationResult.Errors);
+        }
+
+        await adminRecoveryService.ResetPasswordWithOtpAsync(request.UserName, request.Otp, request.NewPassword);
         return NoContent();
     }
 }

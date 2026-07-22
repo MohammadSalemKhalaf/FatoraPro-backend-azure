@@ -48,21 +48,22 @@ public class JwtTokenProviderService(IConfiguration configuration, AppDbContext 
         var tokenHandler = new JwtSecurityTokenHandler();
         var securityToken = tokenHandler.CreateToken(descriptor);
 
-        var refreshToken = await IssueRefreshTokenAsync(user);
+        var rawRefreshToken = await IssueRefreshTokenAsync(user);
 
         return new JwtTokenResponse
         {
             AccessToken = tokenHandler.WriteToken(securityToken),
-            RefreshToken = refreshToken.Token,
+            RefreshToken = rawRefreshToken,
             Expires = expiry
         };
     }
 
     public async Task<JwtTokenResponse> RefreshTokenAsync(string refreshToken)
     {
+        var hashedToken = HashToken(refreshToken);
         var storedToken = await dbContext.RefreshTokens
             .Include(r => r.User)
-            .FirstOrDefaultAsync(r => r.Token == refreshToken);
+            .FirstOrDefaultAsync(r => r.Token == hashedToken);
 
         if (storedToken is null || storedToken.ExpiresOnUtc < DateTime.UtcNow)
         {
@@ -85,14 +86,20 @@ public class JwtTokenProviderService(IConfiguration configuration, AppDbContext 
         await dbContext.SaveChangesAsync();
     }
 
-    private async Task<RefreshToken> IssueRefreshTokenAsync(User user)
+    private async Task<string> IssueRefreshTokenAsync(User user)
     {
         var existingTokens = await dbContext.RefreshTokens.Where(r => r.UserId == user.Id).ToListAsync();
         dbContext.RefreshTokens.RemoveRange(existingTokens);
 
+        var rawToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+
+        // Only the hash is persisted - a stolen DB snapshot doesn't hand out usable refresh tokens.
+        // SHA-256 (not a slow password hash) is appropriate here: this is already 256 bits of secure
+        // randomness, not a guessable user-chosen secret, so it needs collision resistance, not
+        // brute-force resistance.
         var refreshToken = new RefreshToken
         {
-            Token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
+            Token = HashToken(rawToken),
             UserId = user.Id,
             ExpiresOnUtc = DateTime.UtcNow.AddDays(7)
         };
@@ -100,6 +107,9 @@ public class JwtTokenProviderService(IConfiguration configuration, AppDbContext 
         await dbContext.RefreshTokens.AddAsync(refreshToken);
         await dbContext.SaveChangesAsync();
 
-        return refreshToken;
+        return rawToken;
     }
+
+    private static string HashToken(string token) =>
+        Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
 }

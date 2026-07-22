@@ -24,6 +24,8 @@ public static class GroupRegistrations
         Services.AddScoped<IReportService, ReportService>();
         Services.AddScoped<IFileStorageService, FileStorageService>();
         Services.AddScoped<ISyncService, SyncService>();
+        Services.AddScoped<IEmailService, EmailService>();
+        Services.AddScoped<IAdminRecoveryService, AdminRecoveryService>();
 
         Services.AddScoped<LoginRequestValidator>();
         Services.AddScoped<RefreshTokenValidator>();
@@ -37,6 +39,9 @@ public static class GroupRegistrations
         Services.AddScoped<CreateSalesRepRequestValidator>();
         Services.AddScoped<RegisterRequestValidator>();
         Services.AddScoped<UpdateSubscriptionRequestValidator>();
+        Services.AddScoped<ResetPasswordRequestValidator>();
+        Services.AddScoped<AdminForgotPasswordRequestValidator>();
+        Services.AddScoped<AdminResetPasswordRequestValidator>();
         Services.AddScoped<ChangePasswordRequestValidator>();
         Services.AddScoped<DeleteAccountRequestValidator>();
         Services.AddScoped<SyncPushRequestValidator>();

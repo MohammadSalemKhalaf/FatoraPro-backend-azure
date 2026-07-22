@@ -8,12 +8,14 @@
 
 
 ### 1) Login as Admin
+# The only account seeded automatically (see appsettings.json -> AdminSeed). Change the
+# password afterward via reset-password if this ever runs against a real deployment.
 POST {{baseUrl}}/api/account/login
 content-Type: application/json
 
 {
-  "UserName":"admin",
-  "Password":"Admin123"
+  "UserName":"mbaboshi",
+  "Password":"***REMOVED-PASSWORD***"
 }
 
 ### 2) Admin creates a new Sales Rep account
@@ -329,4 +331,43 @@ Authorization: Bearer {{adminToken}}
 
 {
   "SubscriptionType":"Monthly"
+}
+
+### 43) Admin lists all users (no password/refresh token in the response)
+GET {{baseUrl}}/api/users
+Authorization: Bearer {{adminToken}}
+
+### 44) Admin searches users by username or phone number (case-insensitive, partial match)
+GET {{baseUrl}}/api/users?search=ahmad
+Authorization: Bearer {{adminToken}}
+
+### 45) Admin resets a user's password directly (support tool - no old password needed)
+# Also revokes that user's refresh tokens, so any other logged-in device is forced to sign in again.
+POST {{baseUrl}}/api/users/00000000-0000-0000-0000-000000000000/reset-password
+content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+  "NewPassword":"NewPassword123"
+}
+
+### 46) Admin forgot password - requests an OTP emailed to the configured AdminRecovery address
+# Anonymous. Always returns 204 whether or not the username exists/is an Admin (no enumeration).
+# Requires the SMTP_PASSWORD environment variable to be set (Gmail App Password) - never stored in appsettings.json.
+POST {{baseUrl}}/api/account/forgot-password
+content-Type: application/json
+
+{
+  "UserName":"mbaboshi"
+}
+
+### 47) Admin confirms the OTP from email and sets a new password
+# Anonymous. OTP is 6 digits, valid 10 minutes, single-use. Revokes all of the Admin's refresh tokens.
+POST {{baseUrl}}/api/account/reset-password
+content-Type: application/json
+
+{
+  "UserName":"mbaboshi",
+  "Otp":"123456",
+  "NewPassword":"NewAdminPassword123"
 }

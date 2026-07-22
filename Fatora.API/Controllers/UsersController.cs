@@ -13,8 +13,16 @@ namespace Fatora.API.Controllers;
 public class UsersController(
     IUserService userService,
     CreateSalesRepRequestValidator createValidator,
-    UpdateSubscriptionRequestValidator updateSubscriptionValidator) : ControllerBase
+    UpdateSubscriptionRequestValidator updateSubscriptionValidator,
+    ResetPasswordRequestValidator resetPasswordValidator) : ControllerBase
 {
+    [HttpGet]
+    public async Task<IActionResult> GetUsers([FromQuery] string? search)
+    {
+        var result = await userService.GetUsersAsync(search);
+        return Ok(result);
+    }
+
     [HttpPost("sales-reps")]
     public async Task<IActionResult> CreateSalesRep(CreateSalesRepRequest request)
     {
@@ -53,5 +61,18 @@ public class UsersController(
 
         var result = await userService.UpdateSubscriptionAsync(id, request);
         return Ok(result);
+    }
+
+    [HttpPost("{id:guid}/reset-password")]
+    public async Task<IActionResult> ResetPassword(Guid id, ResetPasswordRequest request)
+    {
+        var validationResult = await resetPasswordValidator.ValidateAsync(request);
+        if (!validationResult.IsValid)
+        {
+            return BadRequest(validationResult.Errors);
+        }
+
+        await userService.ResetPasswordAsync(id, request.NewPassword);
+        return NoContent();
     }
 }
