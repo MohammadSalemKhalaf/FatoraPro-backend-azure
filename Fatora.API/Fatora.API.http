@@ -306,3 +306,27 @@ Authorization: Bearer {{salesRepToken}}
 # Store the "serverTime" from the response as the new watermark for the next pull - not the device's own clock.
 GET {{baseUrl}}/api/sync/pull?since=2026-07-20T00:00:00Z
 Authorization: Bearer {{salesRepToken}}
+
+### 41) Self-register a new Sales Rep account - no Admin needed, always starts on a 3-day Trial
+# Only the basics: everything else (City, Street, BusinessName, bank details...) is filled in
+# later from the app's own settings once logged in.
+POST {{baseUrl}}/api/account/register
+content-Type: application/json
+
+{
+  "UserName":"selfsignup1",
+  "Password":"Password123",
+  "Name":"Self Signup",
+  "PhoneNumber":"0799000098"
+}
+
+### 42) Admin changes a Sales Rep's subscription type (Trial, Monthly, Annual, or Lifetime)
+# The server recomputes SubscriptionStart (now) and SubscriptionEnd from the type -
+# dates are never accepted from the client.
+POST {{baseUrl}}/api/users/00000000-0000-0000-0000-000000000000/subscription
+content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+  "SubscriptionType":"Monthly"
+}

@@ -1,5 +1,6 @@
 using Fatora.API.Extensions;
 using Fatora.API.Validators;
+using Fatora.API.Validators.UserValidators;
 using Fatora.BL.DTOs.Requests;
 using Fatora.BL.Services.Abstractions;
 using Microsoft.AspNetCore.Authorization;
@@ -16,8 +17,22 @@ public class AccountController(
     IUserService userService,
     LoginRequestValidator loginRequestValidator,
     RefreshTokenValidator refreshTokenValidator,
-    ChangePasswordRequestValidator changePasswordValidator) : ControllerBase
+    ChangePasswordRequestValidator changePasswordValidator,
+    RegisterRequestValidator registerRequestValidator) : ControllerBase
 {
+    [HttpPost("register")]
+    public async Task<IActionResult> Register(RegisterRequest request)
+    {
+        var validationResult = await registerRequestValidator.ValidateAsync(request);
+        if (!validationResult.IsValid)
+        {
+            return BadRequest(validationResult.Errors);
+        }
+
+        var result = await userService.RegisterAsync(request);
+        return StatusCode(StatusCodes.Status201Created, result);
+    }
+
     [HttpPost("login")]
     public async Task<IActionResult> login(LoginRequest request)
     {

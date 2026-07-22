@@ -69,6 +69,12 @@ public class JwtTokenProviderService(IConfiguration configuration, AppDbContext 
             throw new UnauthorizedException("Invalid or expired refresh token");
         }
 
+        var status = UserService.ComputeAccountStatus(storedToken.User);
+        if (status is "Expired" or "Suspended")
+        {
+            throw new UnauthorizedException($"This account is {status.ToLowerInvariant()}.");
+        }
+
         return await GenerateToken(storedToken.User);
     }
 

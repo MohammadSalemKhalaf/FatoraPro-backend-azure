@@ -22,9 +22,10 @@ public class LoginService(AppDbContext dbContext, IPasswordHasherService passwor
 
         // Safe to be specific here - the caller already proved they know valid credentials,
         // so this doesn't create an enumeration risk like the check above does.
-        if (!user.IsActive)
+        var status = UserService.ComputeAccountStatus(user);
+        if (status is "Expired" or "Suspended")
         {
-            throw new UnauthorizedException("This account has been suspended.");
+            throw new UnauthorizedException($"This account is {status.ToLowerInvariant()}.");
         }
 
         return await jwtTokenProvider.GenerateToken(user);

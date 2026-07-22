@@ -10,7 +10,10 @@ namespace Fatora.API.Controllers;
 [Route("api/[controller]")]
 [ApiController]
 [Authorize(Roles = "Admin")]
-public class UsersController(IUserService userService, CreateSalesRepRequestValidator createValidator) : ControllerBase
+public class UsersController(
+    IUserService userService,
+    CreateSalesRepRequestValidator createValidator,
+    UpdateSubscriptionRequestValidator updateSubscriptionValidator) : ControllerBase
 {
     [HttpPost("sales-reps")]
     public async Task<IActionResult> CreateSalesRep(CreateSalesRepRequest request)
@@ -37,5 +40,18 @@ public class UsersController(IUserService userService, CreateSalesRepRequestVali
     {
         await userService.ActivateAsync(id);
         return NoContent();
+    }
+
+    [HttpPost("{id:guid}/subscription")]
+    public async Task<IActionResult> UpdateSubscription(Guid id, UpdateSubscriptionRequest request)
+    {
+        var validationResult = await updateSubscriptionValidator.ValidateAsync(request);
+        if (!validationResult.IsValid)
+        {
+            return BadRequest(validationResult.Errors);
+        }
+
+        var result = await userService.UpdateSubscriptionAsync(id, request);
+        return Ok(result);
     }
 }

@@ -2,6 +2,7 @@
 
 using Fatora.API;
 using Fatora.API.Exceptions;
+using Fatora.API.Filters;
 using Fatora.BL.Utils;
 using Fatora.DAL.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -57,7 +58,10 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddAuthorization();
 
-builder.Services.AddControllers().AddJsonOptions(options =>
+builder.Services.AddControllers(options =>
+{
+    options.Filters.Add<AccountStatusFilter>();
+}).AddJsonOptions(options =>
 {
     options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
 });

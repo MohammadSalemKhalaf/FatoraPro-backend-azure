@@ -15,11 +15,12 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(x => x.Password).IsRequired();
         builder.Property(x => x.Name).IsRequired();
         builder.Property(x => x.PhoneNumber).IsRequired();
-        builder.Property(x => x.City).IsRequired();
-        builder.Property(x => x.Street).IsRequired();
+        builder.Property(x => x.City).IsRequired(false);
+        builder.Property(x => x.Street).IsRequired(false);
         builder.Property(x => x.BusinessName).IsRequired(false);
 
         builder.Property(x=>x.Role).HasConversion<string>();
+        builder.Property(x => x.SubscriptionType).HasConversion<string>();
         builder.Property(x => x.IsActive).HasDefaultValue(true);
         builder.Property(x => x.NextInvoiceNumber).HasDefaultValue(1);
         builder.HasIndex(x=>x.UserName).IsUnique();

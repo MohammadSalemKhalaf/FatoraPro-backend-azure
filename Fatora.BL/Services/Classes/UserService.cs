@@ -19,6 +19,7 @@ public class UserService(AppDbContext dbContext, IPasswordHasherService password
             throw new ConflictException(nameof(User), request.UserName);
         }
 
+        var start = DateTime.UtcNow;
         var user = new User
         {
             UserName = request.UserName,
@@ -28,12 +29,59 @@ public class UserService(AppDbContext dbContext, IPasswordHasherService password
             BusinessName = request.BusinessName,
             City = request.City,
             Street = request.Street,
-            Role = Role.SalesRep
+            Role = Role.SalesRep,
+            SubscriptionType = SubscriptionType.Trial,
+            SubscriptionStart = start,
+            SubscriptionEnd = ComputeSubscriptionEnd(SubscriptionType.Trial, start)
         };
 
         user.Password = passwordHasher.Hash(user, user.Password);
 
         dbContext.Users.Add(user);
+        await dbContext.SaveChangesAsync();
+
+        return ToResponse(user);
+    }
+
+    public async Task<UserResponse> RegisterAsync(RegisterRequest request)
+    {
+        var usernameTaken = await dbContext.Users.AnyAsync(u => u.UserName == request.UserName);
+
+        if (usernameTaken)
+        {
+            throw new ConflictException(nameof(User), request.UserName);
+        }
+
+        var start = DateTime.UtcNow;
+        var user = new User
+        {
+            UserName = request.UserName,
+            Password = request.Password,
+            Name = request.Name,
+            PhoneNumber = request.PhoneNumber,
+            Role = Role.SalesRep,
+            SubscriptionType = SubscriptionType.Trial,
+            SubscriptionStart = start,
+            SubscriptionEnd = ComputeSubscriptionEnd(SubscriptionType.Trial, start)
+        };
+
+        user.Password = passwordHasher.Hash(user, user.Password);
+
+        dbContext.Users.Add(user);
+        await dbContext.SaveChangesAsync();
+
+        return ToResponse(user);
+    }
+
+    public async Task<UserResponse> UpdateSubscriptionAsync(Guid userId, UpdateSubscriptionRequest request)
+    {
+        var user = await FindUser(userId);
+
+        var start = DateTime.UtcNow;
+        user.SubscriptionType = request.SubscriptionType;
+        user.SubscriptionStart = start;
+        user.SubscriptionEnd = ComputeSubscriptionEnd(request.SubscriptionType, start);
+
         await dbContext.SaveChangesAsync();
 
         return ToResponse(user);
@@ -136,6 +184,35 @@ public class UserService(AppDbContext dbContext, IPasswordHasherService password
         return user;
     }
 
+    public static string ComputeAccountStatus(User user)
+    {
+        if (!user.IsActive)
+        {
+            return "Suspended";
+        }
+
+        if (user.SubscriptionType == SubscriptionType.Lifetime)
+        {
+            return "Active";
+        }
+
+        if (user.SubscriptionEnd is not null && user.SubscriptionEnd < DateTime.UtcNow)
+        {
+            return "Expired";
+        }
+
+        return user.SubscriptionType == SubscriptionType.Trial ? "Trial" : "Active";
+    }
+
+    internal static DateTime? ComputeSubscriptionEnd(SubscriptionType type, DateTime start) => type switch
+    {
+        SubscriptionType.Trial => start.AddDays(3),
+        SubscriptionType.Monthly => start.AddDays(30),
+        SubscriptionType.Annual => start.AddDays(365),
+        SubscriptionType.Lifetime => null,
+        _ => throw new ArgumentOutOfRangeException(nameof(type))
+    };
+
     private static UserResponse ToResponse(User user) => new()
     {
         Id = user.Id,
@@ -150,6 +227,10 @@ public class UserService(AppDbContext dbContext, IPasswordHasherService password
         IsActive = user.IsActive,
         BankName = user.BankName,
         AccountNumber = user.AccountNumber,
-        IBAN = user.IBAN
+        IBAN = user.IBAN,
+        SubscriptionType = user.SubscriptionType.ToString(),
+        SubscriptionStart = user.SubscriptionStart,
+        SubscriptionEnd = user.SubscriptionEnd,
+        AccountStatus = ComputeAccountStatus(user)
     };
 }

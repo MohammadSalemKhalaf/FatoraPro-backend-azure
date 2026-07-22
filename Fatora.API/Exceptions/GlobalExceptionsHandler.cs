@@ -50,6 +50,7 @@ public sealed class GlobalExceptionHandler(
             NotFoundException => (StatusCodes.Status404NotFound, "Resource Not Found"),
             ConflictException => (StatusCodes.Status409Conflict, "Resource Already Exists"),
             UnauthorizedException => (StatusCodes.Status401Unauthorized, "Unauthorized"),
+            ForbiddenException => (StatusCodes.Status403Forbidden, "Forbidden"),
             BadRequestException => (StatusCodes.Status400BadRequest, "Invalid Request"),
 
             AppException appException => ((int)appException.StatusCode, "Application Error"),
@@ -63,6 +64,7 @@ public sealed class GlobalExceptionHandler(
         {
             400 => "https://tools.ietf.org/html/rfc9110#section-15.5.1",
             401 => "https://tools.ietf.org/html/rfc9110#section-15.5.2",
+            403 => "https://tools.ietf.org/html/rfc9110#section-15.5.4",
             404 => "https://tools.ietf.org/html/rfc9110#section-15.5.5",
             409 => "https://tools.ietf.org/html/rfc9110#section-15.5.10",
             500 => "https://tools.ietf.org/html/rfc9110#section-15.6.1",
