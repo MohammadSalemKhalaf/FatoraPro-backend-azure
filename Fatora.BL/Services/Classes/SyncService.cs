@@ -207,7 +207,7 @@ public class SyncService(AppDbContext dbContext) : ISyncService
                     }).ToList()
                 };
 
-                OrderService.ValidateCashDiscount(order.Subtotal, order.DiscountAmount, item.CashDiscount);
+                OrderService.ValidateCashDiscount(order.OrderItems, item.Discount, item.CashDiscount);
                 order.CashDiscount = item.CashDiscount;
 
                 dbContext.Orders.Add(order);
@@ -255,9 +255,7 @@ public class SyncService(AppDbContext dbContext) : ISyncService
             }).ToList();
             dbContext.OrderItems.AddRange(newItems);
 
-            var newSubtotal = newItems.Sum(i => i.TotalPrice);
-            var newDiscountAmount = newSubtotal * (item.Discount / 100m);
-            OrderService.ValidateCashDiscount(newSubtotal, newDiscountAmount, item.CashDiscount);
+            OrderService.ValidateCashDiscount(newItems, item.Discount, item.CashDiscount);
             existing.CashDiscount = item.CashDiscount;
 
             await dbContext.SaveChangesAsync();

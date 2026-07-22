@@ -43,7 +43,7 @@ public class OrderService(AppDbContext dbContext) : IOrderService
             }).ToList()
         };
 
-        ValidateCashDiscount(order.Subtotal, order.DiscountAmount, request.CashDiscount);
+        ValidateCashDiscount(order.OrderItems, request.Discount, request.CashDiscount);
         order.CashDiscount = request.CashDiscount;
 
         dbContext.Orders.Add(order);
@@ -117,12 +117,10 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         }).ToList();
         dbContext.OrderItems.AddRange(newItems);
 
-        // Computed from the new items directly, not order.Subtotal - assigning to the OrderItems
+        // Validated against newItems directly, not order.Subtotal - assigning to the OrderItems
         // navigation before SaveChanges is what caused the earlier EF change-tracker bug, so it's
         // still only set on the in-memory object after the save below, for the response mapping.
-        var newSubtotal = newItems.Sum(i => i.TotalPrice);
-        var newDiscountAmount = newSubtotal * (request.Discount / 100m);
-        ValidateCashDiscount(newSubtotal, newDiscountAmount, request.CashDiscount);
+        ValidateCashDiscount(newItems, request.Discount, request.CashDiscount);
         order.CashDiscount = request.CashDiscount;
 
         await dbContext.SaveChangesAsync();
@@ -217,8 +215,10 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         return summary;
     }
 
-    internal static void ValidateCashDiscount(decimal subtotal, decimal discountAmount, decimal cashDiscount)
+    internal static void ValidateCashDiscount(List<OrderItem> items, decimal discountPercent, decimal cashDiscount)
     {
+        var subtotal = items.Sum(i => i.TotalPrice);
+        var discountAmount = subtotal * (discountPercent / 100m);
         var payableAfterPercentageDiscount = subtotal - discountAmount;
 
         if (cashDiscount > payableAfterPercentageDiscount)
