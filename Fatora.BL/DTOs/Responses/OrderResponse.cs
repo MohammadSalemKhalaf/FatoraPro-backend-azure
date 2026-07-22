@@ -14,6 +14,7 @@ public class OrderResponse
     public DateTime UpdatedAt { get; set; }
     public DateOnly DueDate { get; set; }
     public decimal Discount { get; set; }
+    public decimal CashDiscount { get; set; }
     public string? Notes { get; set; }
     public decimal Subtotal { get; set; }
     public decimal DiscountAmount { get; set; }

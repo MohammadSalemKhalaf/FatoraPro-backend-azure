@@ -160,6 +160,7 @@ Authorization: Bearer {{salesRepToken}}
   "CustomerId":"00000000-0000-0000-0000-000000000000",
   "DueDate":"2026-08-01",
   "Discount":10,
+  "CashDiscount":0,
   "Notes":"Test order",
   "Items":[
     {"ProductId":"00000000-0000-0000-0000-000000000000","Quantity":2}
@@ -175,6 +176,8 @@ GET {{baseUrl}}/api/orders/00000000-0000-0000-0000-000000000000
 Authorization: Bearer {{salesRepToken}}
 
 ### 24) Sales Rep updates an order (replaces line items)
+# CashDiscount rounds off loose change (e.g. a 706 total becomes 700) - independent of the
+# percentage Discount above, and optional/defaults to 0 if omitted entirely.
 PUT {{baseUrl}}/api/orders/00000000-0000-0000-0000-000000000000
 content-Type: application/json
 Authorization: Bearer {{salesRepToken}}
@@ -183,6 +186,7 @@ Authorization: Bearer {{salesRepToken}}
   "CustomerId":"00000000-0000-0000-0000-000000000000",
   "DueDate":"2026-08-15",
   "Discount":0,
+  "CashDiscount":6,
   "Notes":"Updated order",
   "Items":[
     {"ProductId":"00000000-0000-0000-0000-000000000000","Quantity":1}
@@ -288,6 +292,7 @@ Authorization: Bearer {{salesRepToken}}
       "CustomerId":"00000000-0000-0000-0000-000000000001",
       "DueDate":"2026-08-01",
       "Discount":0,
+      "CashDiscount":0,
       "Notes":"made offline",
       "PaidAmount":0,
       "UpdatedAt":"2026-07-20T15:00:00Z",

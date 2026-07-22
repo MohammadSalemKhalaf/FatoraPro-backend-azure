@@ -39,6 +39,7 @@ public class SyncPushRequestValidator : AbstractValidator<SyncPushRequest>
             order.RuleFor(o => o.Id).NotEqual(Guid.Empty);
             order.RuleFor(o => o.CustomerId).NotEqual(Guid.Empty);
             order.RuleFor(o => o.Discount).InclusiveBetween(0, 100);
+            order.RuleFor(o => o.CashDiscount).GreaterThanOrEqualTo(0);
             order.RuleFor(o => o.PaidAmount).GreaterThanOrEqualTo(0);
             order.RuleFor(o => o.Items).NotEmpty();
 

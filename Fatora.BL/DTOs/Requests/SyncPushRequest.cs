@@ -39,7 +39,8 @@ public sealed record OrderSyncItem(
     string? Notes,
     [Range(0, double.MaxValue)] decimal PaidAmount,
     DateTime UpdatedAt,
-    [Required, MinLength(1)] List<OrderItemSyncItem> Items
+    [Required, MinLength(1)] List<OrderItemSyncItem> Items,
+    [Range(0, double.MaxValue)] decimal CashDiscount = 0m
 );
 
 public sealed record OrderItemSyncItem(

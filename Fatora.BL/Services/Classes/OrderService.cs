@@ -43,6 +43,9 @@ public class OrderService(AppDbContext dbContext) : IOrderService
             }).ToList()
         };
 
+        ValidateCashDiscount(order.Subtotal, order.DiscountAmount, request.CashDiscount);
+        order.CashDiscount = request.CashDiscount;
+
         dbContext.Orders.Add(order);
         await dbContext.SaveChangesAsync();
 
@@ -114,9 +117,18 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         }).ToList();
         dbContext.OrderItems.AddRange(newItems);
 
+        // Computed from the new items directly, not order.Subtotal - assigning to the OrderItems
+        // navigation before SaveChanges is what caused the earlier EF change-tracker bug, so it's
+        // still only set on the in-memory object after the save below, for the response mapping.
+        var newSubtotal = newItems.Sum(i => i.TotalPrice);
+        var newDiscountAmount = newSubtotal * (request.Discount / 100m);
+        ValidateCashDiscount(newSubtotal, newDiscountAmount, request.CashDiscount);
+        order.CashDiscount = request.CashDiscount;
+
         await dbContext.SaveChangesAsync();
 
         order.OrderItems = newItems;
+
         order.Customer = customer;
         return ToResponse(order);
     }
@@ -205,6 +217,17 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         return summary;
     }
 
+    internal static void ValidateCashDiscount(decimal subtotal, decimal discountAmount, decimal cashDiscount)
+    {
+        var payableAfterPercentageDiscount = subtotal - discountAmount;
+
+        if (cashDiscount > payableAfterPercentageDiscount)
+        {
+            throw new BadRequestException(
+                $"Cash discount ({cashDiscount}) exceeds the payable amount ({payableAfterPercentageDiscount}).");
+        }
+    }
+
     internal static string ComputeStatus(Order order, DateOnly today)
     {
         if (order.RemainingBalance <= 0)
@@ -267,6 +290,7 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         UpdatedAt = order.UpdatedAt,
         DueDate = order.DueDate,
         Discount = order.Discount,
+        CashDiscount = order.CashDiscount,
         Notes = order.Notes,
         Subtotal = order.Subtotal,
         DiscountAmount = order.DiscountAmount,

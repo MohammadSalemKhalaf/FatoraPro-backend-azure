@@ -10,11 +10,12 @@ public class Order : ISyncableEntity
     public Guid Id { get; set; } = Guid.NewGuid();
     public required string InvoiceNumber { get; set; }
     public decimal Discount { get; set; }
+    public decimal CashDiscount { get; set; }
     public string? Notes { get; set; }
 
     public decimal Subtotal => OrderItems.Sum(o => o.TotalPrice);
     public decimal DiscountAmount => Subtotal * (Discount / 100m);
-    public decimal Total => Subtotal - DiscountAmount;
+    public decimal Total => Subtotal - DiscountAmount - CashDiscount;
     public decimal PaidAmount { get; set; }
     public decimal RemainingBalance => Total - PaidAmount;
 

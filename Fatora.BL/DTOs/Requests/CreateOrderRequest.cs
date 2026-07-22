@@ -7,5 +7,6 @@ public sealed record CreateOrderRequest(
     DateOnly DueDate,
     [Range(0, 100)] decimal Discount,
     string? Notes,
-    [Required, MinLength(1)] List<OrderItemRequest> Items
+    [Required, MinLength(1)] List<OrderItemRequest> Items,
+    [Range(0, double.MaxValue)] decimal CashDiscount = 0m
 );
