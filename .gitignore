@@ -6,6 +6,9 @@
 # dotenv files
 .env
 
+# Local-only secrets - never commit (see appsettings.json for the production/env-var equivalents)
+Fatora.API/appsettings.Development.json
+
 # User-specific files
 *.rsuser
 *.suo
