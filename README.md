@@ -19,6 +19,7 @@ It is intentionally simple: fast to use in the field, and free of features (tax 
 - [API Reference](#api-reference)
 - [Offline-First Sync](#offline-first-sync)
 - [End-to-End Example](#end-to-end-example)
+- [Deployment](#deployment)
 
 ---
 
@@ -44,6 +45,8 @@ It is intentionally simple: fast to use in the field, and free of features (tax 
 | Validation | FluentValidation + DataAnnotations |
 | Error handling | Custom exception hierarchy → RFC 7807 `ProblemDetails` |
 | File storage | Local disk (`wwwroot/uploads`) |
+| Email | Gmail SMTP — Admin password-recovery OTP only, not used for SalesReps |
+| Containerization | Docker (see [Deployment](#deployment)) |
 
 ---
 
@@ -103,7 +106,9 @@ Fatora.DAL/
 ## Key Business Rules
 
 - **No tax, single currency (ILS).**
-- **Username/password auth only** — no email, no social login.
+- **Username/password auth for everyone — no social login.** The only email in the system is a single Admin recovery address (`AdminRecovery:Email`), used solely for the Admin's own forgot-password OTP flow — SalesRep accounts have no email field at all.
+- **Sales Reps can self-register** (`POST /api/account/register`, always starts on a 3-day Trial) or be created directly by the Admin — both paths exist side by side.
+- **Every subscription state is computed, never stored.** `AccountStatus` (`Trial`/`Active`/`Expired`/`Suspended`) is derived on read from `SubscriptionType`/`SubscriptionEnd` and `IsActive` — enforced on *every* authenticated SalesRep request via a global filter, not just at login.
 - **No separate `Payment` ledger.** `Order.PaidAmount` is a single stored field, updated via `POST /api/orders/{id}/record-payment`. No history of individual payment events is kept. `Status` (`Sent` / `PartiallyPaid` / `Paid` / `Overdue`) is computed on read from `PaidAmount`, `Total`, and `DueDate`.
 - **Orders can be permanently deleted** by the owning Sales Rep, cascading to their line items — the app favors an uncluttered invoice list over permanent audit history.
 - **`Customer` and `Product` use soft-delete** (`IsActive`, with archive/restore/permanent-delete). `Order` deletion is hard, since it has no child records to protect.
@@ -125,13 +130,16 @@ Fatora.DAL/
 ### Setup
 
 1. Clone the repository.
-2. Configure the connection string in `Fatora.API/appsettings.json` (`ConnectionStrings:DefaultConnection`). In production, `JwtSettings:SecretKey` should come from environment/secret storage, not source control.
-3. Run the app — migrations and seed data (roles + initial Admin account) apply automatically on startup:
+2. `Fatora.API/appsettings.json` holds no secrets — it's committed and shared. Local-only values (DB connection string, JWT signing key) live in `Fatora.API/appsettings.Development.json`, which is what `dotnet run` uses by default. Fill in your own local Postgres connection string and generate your own JWT secret there; the app throws a clear startup error naming exactly which one is missing if you skip this.
+3. Set `AdminSeed__Password` as an environment variable (the seeded Admin's username comes from `AdminSeed:UserName` in `appsettings.json`; the password never lives in a file). Optionally set `SMTP_PASSWORD` (a Gmail App Password) if you want to test the Admin OTP recovery email locally.
+4. Run the app — migrations and Admin seeding apply automatically on startup:
    ```bash
    cd Fatora.API
    dotnet run
    ```
-4. Binds to `http://0.0.0.0:5050` by default (all network interfaces), reachable from `localhost` or another device on the same network. `GET /health` should return `{"message":"all up"}`.
+5. Binds to `http://0.0.0.0:5050` by default (all network interfaces), reachable from `localhost` or another device on the same network. `GET /health` should return `{"message":"all up"}`.
+
+See [Deployment](#deployment) for what changes in production (all of the above move to real environment variables, nothing stays in a file).
 
 ### Testing Endpoints
 
@@ -143,21 +151,25 @@ Fatora.DAL/
 
 Two roles exist: `Admin` and `SalesRep`.
 
-- There is exactly one Admin account, created by database seed on first run.
-- The Admin creates `SalesRep` accounts via `POST /api/users/sales-reps` — reps cannot self-register.
-- Every other business endpoint (`Customers`, `Products`, `Orders`, `Reports`, `Profile`, `Sync`) is `[Authorize(Roles = "SalesRep")]`.
+- One Admin account is created by database seed on first run (username from `AdminSeed:UserName`, password from the `AdminSeed__Password` environment variable — never stored in a file).
+- A `SalesRep` account can either self-register (`POST /api/account/register`, anonymous, always starts on a 3-day Trial) or be created directly by the Admin (`POST /api/users/sales-reps`).
+- Every other business endpoint (`Customers`, `Products`, `Orders`, `Reports`, `Profile`, `Sync`) is `[Authorize(Roles = "SalesRep")]`. Admin-only management endpoints live under `UsersController`.
+- A global `AccountStatusFilter` runs on every authenticated SalesRep request (not just login) and rejects with `403` if the computed `AccountStatus` is `Expired` or `Suspended`. Admins are exempt — they have no subscription concept.
 
-Login (`POST /api/account/login`) returns a JWT access token and a refresh token. `POST /api/account/refresh-token` rotates them. `POST /api/account/logout` revokes the current refresh token immediately.
+Login (`POST /api/account/login`) returns a JWT access token and a refresh token. `POST /api/account/refresh-token` rotates them (the stored refresh token is a SHA-256 hash, never the raw value). `POST /api/account/logout` revokes the current refresh token immediately. If a SalesRep's account is `Expired` or `Suspended`, both login and refresh are rejected with `401`.
+
+**Admin password recovery**: if the Admin forgets their password, `POST /api/account/forgot-password` emails a 6-digit, single-use OTP (valid 10 minutes) to the configured `AdminRecovery:Email` via Gmail SMTP. `POST /api/account/reset-password` confirms the OTP and sets a new password, revoking all of the Admin's refresh tokens. SalesReps have no equivalent self-service flow — the Admin resets a rep's password directly via `POST /api/users/{id}/reset-password`.
 
 ---
 
 ## Features
 
-- **Auth**: login, refresh-token rotation, logout, change-password, self-delete-account.
-- **Admin**: create Sales Rep accounts, suspend/reactivate accounts.
+- **Auth**: login, refresh-token rotation, logout, change-password, self-delete-account, self-registration (Trial).
+- **Subscriptions**: `Trial` / `Monthly` / `Annual` / `Lifetime`, computed `AccountStatus`, enforced on every request — Admin changes a rep's plan anytime via `POST /api/users/{id}/subscription` (server computes the dates, never accepts them from the client).
+- **Admin**: create Sales Rep accounts, list/search all users, suspend/reactivate accounts, change subscriptions, reset a rep's password directly, recover their own password via emailed OTP.
 - **Products**: CRUD, image upload, soft-delete/archive/restore/permanent-delete.
 - **Customers**: CRUD, soft-delete/archive/restore/permanent-delete.
-- **Orders (Invoices)**: create/update/delete, computed status, record payments, sequential per-rep invoice numbering (`INV-0001`, ...).
+- **Orders (Invoices)**: create/update/delete, computed status, percentage + manual cash discount, record payments, sequential per-rep invoice numbering (`INV-0001`, ...).
 - **Dashboard**: order summary (count/total/paid/outstanding by status), filterable by period.
 - **Reports**: sales-over-time, items breakdown, clients breakdown.
 - **Profile**: business name, logo, bank details.
@@ -171,8 +183,8 @@ Quick map of controllers — see `Fatora.API.http` for the full request list.
 
 | Controller | Base route | Notes |
 |---|---|---|
-| `AccountController` | `/api/account` | `login`, `refresh-token` (anonymous); `logout`, `change-password` |
-| `UsersController` | `/api/users` | Admin-only: `sales-reps` (create), `{id}/suspend`, `{id}/activate` |
+| `AccountController` | `/api/account` | `register`, `login`, `refresh-token`, `forgot-password`, `reset-password` (all anonymous); `logout`, `change-password` |
+| `UsersController` | `/api/users` | Admin-only: list/search (`GET ?search=`), `sales-reps` (create), `{id}/suspend`, `{id}/activate`, `{id}/subscription`, `{id}/reset-password` |
 | `ProfileController` | `/api/profile` | Get profile, logo upload, bank details, self-delete |
 | `CustomersController` | `/api/customers` | Full CRUD + archive/restore/permanent-delete |
 | `ProductsController` | `/api/products` | Full CRUD + image upload + archive/restore/permanent-delete |
@@ -242,3 +254,24 @@ POST /api/orders/{id}/record-payment
 GET /api/orders/summary?period=Month
 GET /api/reports/clients?period=Week&sortBy=TopValue
 ```
+
+---
+
+## Deployment
+
+A `Dockerfile` at the repo root builds and runs the API (`dotnet publish` in a build stage, `mcr.microsoft.com/dotnet/aspnet:10.0` for the runtime stage). It reads the listen port from the `$PORT` environment variable, matching how most PaaS hosts (Render, Railway, Fly.io) assign it at container start.
+
+Migrations and admin seeding run automatically on startup — no manual migration step is needed after a deploy.
+
+**Required environment variables** (none of these should live in committed `appsettings.json`):
+
+| Variable | Purpose |
+|---|---|
+| `ConnectionStrings__DefaultConnection` | Real Postgres connection string |
+| `JwtSettings__SecretKey` | JWT signing key — generate a fresh, unique secret for production, distinct from your local `appsettings.Development.json` value |
+| `AdminSeed__Password` | Password for the seeded Admin account (`AdminSeed:UserName` in `appsettings.json` sets the username). The app throws a clear startup error if this is missing |
+| `SMTP_PASSWORD` | Gmail App Password used to send Admin OTP recovery codes |
+
+`AdminRecovery:Email` (the destination address for OTP codes) is not sensitive and can stay in `appsettings.json`.
+
+**Known limitation:** uploaded product/logo images are stored on local disk (`wwwroot/uploads/`). Most PaaS free/default tiers use an ephemeral filesystem, so uploaded files are lost on redeploy unless a persistent volume is attached.
