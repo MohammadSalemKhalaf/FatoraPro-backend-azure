@@ -7,7 +7,7 @@ public interface IUserService
 {
     public Task<UserResponse> CreateSalesRepAsync(CreateSalesRepRequest request);
     public Task<UserResponse> RegisterAsync(RegisterRequest request);
-    public Task<UserResponse> UpdateSubscriptionAsync(Guid userId, UpdateSubscriptionRequest request);
+    public Task<AdminUserResponse> UpdateSubscriptionAsync(Guid userId, UpdateSubscriptionRequest request);
     public Task<List<AdminUserResponse>> GetUsersAsync(string? search);
     public Task ResetPasswordAsync(Guid userId, string newPassword);
     public Task<UserResponse> GetProfileAsync(Guid userId);

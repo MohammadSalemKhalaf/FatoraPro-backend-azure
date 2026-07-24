@@ -32,7 +32,8 @@ public class UserService(AppDbContext dbContext, IPasswordHasherService password
             Role = Role.SalesRep,
             SubscriptionType = SubscriptionType.Trial,
             SubscriptionStart = start,
-            SubscriptionEnd = ComputeSubscriptionEnd(SubscriptionType.Trial, start)
+            SubscriptionEnd = ComputeSubscriptionEnd(SubscriptionType.Trial, start),
+            CreatedAt = start
         };
 
         user.Password = passwordHasher.Hash(user, user.Password);
@@ -59,10 +60,12 @@ public class UserService(AppDbContext dbContext, IPasswordHasherService password
             Password = request.Password,
             Name = request.Name,
             PhoneNumber = request.PhoneNumber,
+            BusinessName = request.BusinessName,
             Role = Role.SalesRep,
             SubscriptionType = SubscriptionType.Trial,
             SubscriptionStart = start,
-            SubscriptionEnd = ComputeSubscriptionEnd(SubscriptionType.Trial, start)
+            SubscriptionEnd = ComputeSubscriptionEnd(SubscriptionType.Trial, start),
+            CreatedAt = start
         };
 
         user.Password = passwordHasher.Hash(user, user.Password);
@@ -73,7 +76,7 @@ public class UserService(AppDbContext dbContext, IPasswordHasherService password
         return ToResponse(user);
     }
 
-    public async Task<UserResponse> UpdateSubscriptionAsync(Guid userId, UpdateSubscriptionRequest request)
+    public async Task<AdminUserResponse> UpdateSubscriptionAsync(Guid userId, UpdateSubscriptionRequest request)
     {
         var user = await FindUser(userId);
 
@@ -84,7 +87,7 @@ public class UserService(AppDbContext dbContext, IPasswordHasherService password
 
         await dbContext.SaveChangesAsync();
 
-        return ToResponse(user);
+        return ToAdminResponse(user);
     }
 
     public async Task<List<AdminUserResponse>> GetUsersAsync(string? search)
@@ -95,7 +98,8 @@ public class UserService(AppDbContext dbContext, IPasswordHasherService password
         {
             query = query.Where(u =>
                 EF.Functions.ILike(u.UserName, $"%{search}%") ||
-                EF.Functions.ILike(u.PhoneNumber, $"%{search}%"));
+                EF.Functions.ILike(u.PhoneNumber, $"%{search}%") ||
+                EF.Functions.ILike(u.Name, $"%{search}%"));
         }
 
         var users = await query.ToListAsync();
@@ -245,13 +249,17 @@ public class UserService(AppDbContext dbContext, IPasswordHasherService password
     {
         Id = user.Id,
         UserName = user.UserName,
+        Name = user.Name,
         PhoneNumber = user.PhoneNumber,
+        City = user.City,
+        BusinessName = user.BusinessName,
         Role = user.Role.ToString(),
         IsActive = user.IsActive,
         SubscriptionType = user.SubscriptionType.ToString(),
         SubscriptionStart = user.SubscriptionStart,
         SubscriptionEnd = user.SubscriptionEnd,
-        AccountStatus = ComputeAccountStatus(user)
+        AccountStatus = ComputeAccountStatus(user),
+        CreatedAt = user.CreatedAt
     };
 
     private static UserResponse ToResponse(User user) => new()

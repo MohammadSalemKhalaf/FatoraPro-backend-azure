@@ -43,7 +43,8 @@ public static class SeedData
             PhoneNumber = "0000000000",
             Role = Role.Admin,
             SubscriptionType = SubscriptionType.Lifetime,
-            SubscriptionStart = start
+            SubscriptionStart = start,
+            CreatedAt = start
         };
 
         admin.Password = passwordHasher.Hash(admin, admin.Password);

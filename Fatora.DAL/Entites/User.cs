@@ -40,6 +40,7 @@ public class User
     public SubscriptionType SubscriptionType { get; set; } = SubscriptionType.Trial;
     public DateTime SubscriptionStart { get; set; }
     public DateTime? SubscriptionEnd { get; set; }
+    public DateTime CreatedAt { get; set; }
 
 
     public List<Product> Items { get; set; } = new List<Product>();

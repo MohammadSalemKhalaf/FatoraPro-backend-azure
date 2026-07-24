@@ -6,5 +6,6 @@ public sealed record RegisterRequest(
     [Required, MaxLength(30)] string UserName,
     [Required] string Password,
     [Required] string Name,
-    [Required] string PhoneNumber
+    [Required] string PhoneNumber,
+    string? BusinessName = null
 );
