@@ -10,6 +10,14 @@ namespace Fatora.BL.Services.Classes;
 
 public class OrderService(AppDbContext dbContext) : IOrderService
 {
+    // The Flutter client stores money as `double`, so a "pay the exact
+    // remaining balance" round-trip can come back a fraction of a cent off
+    // from the `decimal` value that was quoted. Tolerating anything under a
+    // cent keeps that drift from blocking a legitimate full payment or
+    // leaving an order stuck as "PartiallyPaid" after one.
+    private const decimal AmountTolerance = 0.01m;
+
+
     public async Task<OrderResponse> CreateAsync(Guid userId, CreateOrderRequest request)
     {
         var customer = await FindOwnedActiveCustomer(userId, request.CustomerId);
@@ -153,7 +161,7 @@ public class OrderService(AppDbContext dbContext) : IOrderService
             throw new NotFoundException(nameof(Order), id);
         }
 
-        if (request.Amount > order.RemainingBalance)
+        if (request.Amount > order.RemainingBalance + AmountTolerance)
         {
             throw new BadRequestException($"Payment amount ({request.Amount}) exceeds the remaining balance ({order.RemainingBalance}).");
         }
@@ -230,7 +238,7 @@ public class OrderService(AppDbContext dbContext) : IOrderService
 
     internal static string ComputeStatus(Order order, DateOnly today)
     {
-        if (order.RemainingBalance <= 0)
+        if (order.RemainingBalance <= AmountTolerance)
         {
             return "Paid";
         }

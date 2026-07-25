@@ -44,6 +44,7 @@ public static class GroupRegistrations
         Services.AddScoped<AdminResetPasswordRequestValidator>();
         Services.AddScoped<ChangePasswordRequestValidator>();
         Services.AddScoped<DeleteAccountRequestValidator>();
+        Services.AddScoped<UpdateProfileRequestValidator>();
         Services.AddScoped<SyncPushRequestValidator>();
 
         return Services;

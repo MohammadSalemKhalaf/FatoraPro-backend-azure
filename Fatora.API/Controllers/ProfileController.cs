@@ -1,6 +1,7 @@
 using Fatora.API.Extensions;
 using Fatora.API.Services;
 using Fatora.API.Validators;
+using Fatora.API.Validators.UserValidators;
 using Fatora.BL.DTOs.Requests;
 using Fatora.BL.Services.Abstractions;
 using Microsoft.AspNetCore.Authorization;
@@ -15,12 +16,26 @@ namespace Fatora.API.Controllers;
 public class ProfileController(
     IUserService userService,
     IFileStorageService fileStorageService,
-    DeleteAccountRequestValidator deleteAccountValidator) : ControllerBase
+    DeleteAccountRequestValidator deleteAccountValidator,
+    UpdateProfileRequestValidator updateProfileValidator) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> GetProfile()
     {
         var result = await userService.GetProfileAsync(User.GetUserId());
+        return Ok(result);
+    }
+
+    [HttpPut]
+    public async Task<IActionResult> UpdateProfile(UpdateProfileRequest request)
+    {
+        var validationResult = await updateProfileValidator.ValidateAsync(request);
+        if (!validationResult.IsValid)
+        {
+            return BadRequest(validationResult.Errors);
+        }
+
+        var result = await userService.UpdateProfileAsync(User.GetUserId(), request);
         return Ok(result);
     }
 

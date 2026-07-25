@@ -142,6 +142,19 @@ public class UserService(AppDbContext dbContext, IPasswordHasherService password
         return ToResponse(user);
     }
 
+    public async Task<UserResponse> UpdateProfileAsync(Guid userId, UpdateProfileRequest request)
+    {
+        var user = await FindUser(userId);
+
+        user.Name = request.Name;
+        user.PhoneNumber = request.PhoneNumber;
+        user.BusinessName = request.BusinessName;
+
+        await dbContext.SaveChangesAsync();
+
+        return ToResponse(user);
+    }
+
     public async Task DeleteAccountAsync(Guid userId, string password)
     {
         var user = await FindUser(userId);
