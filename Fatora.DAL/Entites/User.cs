@@ -37,6 +37,7 @@ public class User
     public string? AccountNumber { get; set; }
     public string? IBAN { get; set; }
     public int NextInvoiceNumber { get; set; } = 1;
+    public int NextInvoiceNumberYear { get; set; }
     public SubscriptionType SubscriptionType { get; set; } = SubscriptionType.Trial;
     public DateTime SubscriptionStart { get; set; }
     public DateTime? SubscriptionEnd { get; set; }

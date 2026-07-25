@@ -15,7 +15,11 @@ public class Order : ISyncableEntity
 
     public decimal Subtotal => OrderItems.Sum(o => o.TotalPrice);
     public decimal DiscountAmount => Subtotal * (Discount / 100m);
-    public decimal Total => Subtotal - DiscountAmount - CashDiscount;
+
+    // Rounded to the nearest half-unit (e.g. 746.2 -> 746.0, 746.3 -> 746.5) -
+    // the payable total is always a clean half or whole amount, never odd cents.
+    public decimal Total =>
+        Math.Round((Subtotal - DiscountAmount - CashDiscount) * 2, 0, MidpointRounding.AwayFromZero) / 2;
     public decimal PaidAmount { get; set; }
     public decimal RemainingBalance => Total - PaidAmount;
 

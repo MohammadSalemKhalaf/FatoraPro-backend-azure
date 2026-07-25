@@ -278,8 +278,16 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         // A running per-user counter, not a COUNT of existing orders - orders can now be permanently
         // deleted, and counting would reissue an already-used invoice number as soon as any order
         // was removed from the middle or end of the sequence, colliding with the unique index.
+        // The sequence resets to 1 at the start of each calendar year (INV/{year}/0001) so a yearly
+        // data audit can work off a clean per-year range instead of one lifetime-long sequence.
         var user = await dbContext.Users.FirstAsync(u => u.Id == userId);
-        var invoiceNumber = $"INV-{user.NextInvoiceNumber:D4}";
+        var currentYear = DateTime.UtcNow.Year;
+        if (user.NextInvoiceNumberYear != currentYear)
+        {
+            user.NextInvoiceNumberYear = currentYear;
+            user.NextInvoiceNumber = 1;
+        }
+        var invoiceNumber = $"INV/{currentYear}/{user.NextInvoiceNumber:D4}";
         user.NextInvoiceNumber++;
         return invoiceNumber;
     }
