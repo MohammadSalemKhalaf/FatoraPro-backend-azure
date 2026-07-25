@@ -52,6 +52,13 @@ public class FileStorageService(IWebHostEnvironment webHostEnvironment) : IFileS
         return $"/uploads/{subFolder}/{fileName}";
     }
 
+    public Task DeleteImageAsync(string relativeUrl)
+    {
+        var webRootPath = webHostEnvironment.WebRootPath ?? Path.Combine(webHostEnvironment.ContentRootPath, "wwwroot");
+        DeletePreviousFile(webRootPath, relativeUrl);
+        return Task.CompletedTask;
+    }
+
     private static void DeletePreviousFile(string webRootPath, string? previousRelativeUrl)
     {
         if (string.IsNullOrWhiteSpace(previousRelativeUrl))

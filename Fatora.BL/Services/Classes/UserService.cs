@@ -129,6 +129,16 @@ public class UserService(AppDbContext dbContext, IPasswordHasherService password
         return ToResponse(user);
     }
 
+    public async Task<UserResponse> DeleteLogoAsync(Guid userId)
+    {
+        var user = await FindUser(userId);
+
+        user.LogoUrl = null;
+        await dbContext.SaveChangesAsync();
+
+        return ToResponse(user);
+    }
+
     public async Task<UserResponse> UpdateBankDetailsAsync(Guid userId, UpdateBankDetailsRequest request)
     {
         var user = await FindUser(userId);

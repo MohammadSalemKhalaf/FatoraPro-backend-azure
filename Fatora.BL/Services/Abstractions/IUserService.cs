@@ -13,6 +13,7 @@ public interface IUserService
     public Task<UserResponse> GetProfileAsync(Guid userId);
     public Task<string?> GetLogoUrlAsync(Guid userId);
     public Task<UserResponse> UpdateLogoAsync(Guid userId, string logoUrl);
+    public Task<UserResponse> DeleteLogoAsync(Guid userId);
     public Task<UserResponse> UpdateBankDetailsAsync(Guid userId, UpdateBankDetailsRequest request);
     public Task<UserResponse> UpdateProfileAsync(Guid userId, UpdateProfileRequest request);
     public Task DeleteAccountAsync(Guid userId, string password);

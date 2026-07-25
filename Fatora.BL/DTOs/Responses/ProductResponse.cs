@@ -6,6 +6,7 @@ public class ProductResponse
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
     public string? ImageUrl { get; set; }
+    public string? Barcode { get; set; }
     public decimal PurchasePrice { get; set; }
     public decimal SellPrice { get; set; }
     public bool IsActive { get; set; }

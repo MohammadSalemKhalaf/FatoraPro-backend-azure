@@ -12,6 +12,8 @@ public class ProductService(AppDbContext dbContext) : IProductService
 {
     public async Task<ProductResponse> CreateAsync(Guid userId, CreateProductRequest request)
     {
+        await EnsureBarcodeAvailableAsync(userId, request.Barcode, excludingProductId: null);
+
         var product = new Product
         {
             Name = request.Name,
@@ -19,6 +21,7 @@ public class ProductService(AppDbContext dbContext) : IProductService
             ImageUrl = request.ImageUrl,
             PurchasePrice = request.PurchasePrice,
             SellPrice = request.SellPrice,
+            Barcode = request.Barcode,
             UserId = userId
         };
 
@@ -58,15 +61,31 @@ public class ProductService(AppDbContext dbContext) : IProductService
             throw new NotFoundException(nameof(Product), id);
         }
 
+        await EnsureBarcodeAvailableAsync(userId, request.Barcode, excludingProductId: id);
+
         product.Name = request.Name;
         product.Description = request.Description;
         product.ImageUrl = request.ImageUrl;
         product.PurchasePrice = request.PurchasePrice;
         product.SellPrice = request.SellPrice;
+        product.Barcode = request.Barcode;
 
         await dbContext.SaveChangesAsync();
 
         return ToResponse(product);
+    }
+
+    private async Task EnsureBarcodeAvailableAsync(Guid userId, string? barcode, Guid? excludingProductId)
+    {
+        if (string.IsNullOrWhiteSpace(barcode)) return;
+
+        var taken = await dbContext.Products.AnyAsync(p =>
+            p.UserId == userId && p.Barcode == barcode && p.Id != excludingProductId);
+
+        if (taken)
+        {
+            throw new ConflictException("هذا الباركود مستخدم مسبقًا لمنتج آخر.");
+        }
     }
 
     public async Task<ProductResponse> UpdateImageAsync(Guid userId, Guid id, string imageUrl)
@@ -146,6 +165,7 @@ public class ProductService(AppDbContext dbContext) : IProductService
         Name = product.Name,
         Description = product.Description,
         ImageUrl = product.ImageUrl,
+        Barcode = product.Barcode,
         PurchasePrice = product.PurchasePrice,
         SellPrice = product.SellPrice,
         IsActive = product.IsActive,

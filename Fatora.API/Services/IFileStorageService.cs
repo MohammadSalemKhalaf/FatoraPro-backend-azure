@@ -7,4 +7,9 @@ public interface IFileStorageService
     /// If <paramref name="previousRelativeUrl"/> is provided, the old file is deleted (best-effort).
     /// </summary>
     Task<string> SaveImageAsync(IFormFile file, string subFolder, string? previousRelativeUrl = null);
+
+    /// <summary>
+    /// Deletes a previously saved image (best-effort - a missing file is not an error).
+    /// </summary>
+    Task DeleteImageAsync(string relativeUrl);
 }

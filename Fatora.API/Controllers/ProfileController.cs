@@ -49,6 +49,19 @@ public class ProfileController(
         return Ok(result);
     }
 
+    [HttpDelete("logo")]
+    public async Task<IActionResult> DeleteLogo()
+    {
+        var userId = User.GetUserId();
+        var currentLogoUrl = await userService.GetLogoUrlAsync(userId);
+        if (!string.IsNullOrWhiteSpace(currentLogoUrl))
+        {
+            await fileStorageService.DeleteImageAsync(currentLogoUrl);
+        }
+        var result = await userService.DeleteLogoAsync(userId);
+        return Ok(result);
+    }
+
     [HttpPut("bank-details")]
     public async Task<IActionResult> UpdateBankDetails(UpdateBankDetailsRequest request)
     {

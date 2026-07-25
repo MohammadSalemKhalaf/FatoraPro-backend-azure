@@ -7,5 +7,6 @@ public sealed record CreateProductRequest(
     string? Description,
     string? ImageUrl,
     [Range(0, double.MaxValue)] decimal PurchasePrice,
-    [Range(0, double.MaxValue)] decimal SellPrice
+    [Range(0, double.MaxValue)] decimal SellPrice,
+    string? Barcode
 );
