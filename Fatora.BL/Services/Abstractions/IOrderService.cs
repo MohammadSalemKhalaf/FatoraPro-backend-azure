@@ -7,6 +7,7 @@ public interface IOrderService
 {
     Task<OrderResponse> CreateAsync(Guid userId, CreateOrderRequest request);
     Task<List<OrderResponse>> GetAllAsync(Guid userId);
+    Task<List<OrderResponse>> GetPagedAsync(Guid userId, int skip, int take);
     Task<OrderResponse> GetByIdAsync(Guid userId, Guid id);
     Task<OrderResponse> UpdateAsync(Guid userId, Guid id, UpdateOrderRequest request);
     Task DeleteAsync(Guid userId, Guid id);

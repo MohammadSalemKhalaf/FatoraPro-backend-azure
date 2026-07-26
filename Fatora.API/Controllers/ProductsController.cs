@@ -31,10 +31,19 @@ public class ProductsController(
         return StatusCode(StatusCodes.Status201Created, result);
     }
 
+    // skip/take are optional and additive - omitting both preserves the
+    // original "return everything" behavior existing callers (invoice
+    // product picker, data export, barcode lookups) still rely on.
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll([FromQuery] int? skip, [FromQuery] int? take)
     {
-        var result = await productService.GetAllAsync(User.GetUserId());
+        if (skip is null && take is null)
+        {
+            var all = await productService.GetAllAsync(User.GetUserId());
+            return Ok(all);
+        }
+
+        var result = await productService.GetPagedAsync(User.GetUserId(), skip ?? 0, Math.Clamp(take ?? 20, 1, 100));
         return Ok(result);
     }
 
@@ -64,6 +73,19 @@ public class ProductsController(
         var product = await productService.GetByIdAsync(User.GetUserId(), id);
         var imageUrl = await fileStorageService.SaveImageAsync(file, "products", product.ImageUrl);
         var result = await productService.UpdateImageAsync(User.GetUserId(), id, imageUrl);
+        return Ok(result);
+    }
+
+    [HttpDelete("{id:guid}/image")]
+    public async Task<IActionResult> DeleteImage(Guid id)
+    {
+        var userId = User.GetUserId();
+        var product = await productService.GetByIdAsync(userId, id);
+        if (!string.IsNullOrWhiteSpace(product.ImageUrl))
+        {
+            await fileStorageService.DeleteImageAsync(product.ImageUrl);
+        }
+        var result = await productService.DeleteImageAsync(userId, id);
         return Ok(result);
     }
 

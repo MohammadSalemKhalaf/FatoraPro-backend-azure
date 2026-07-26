@@ -40,6 +40,20 @@ public class ProductService(AppDbContext dbContext) : IProductService
         return products.Select(ToResponse).ToList();
     }
 
+    // Newest-first, with a stable sort so Skip/Take means the same "page"
+    // on every call.
+    public async Task<List<ProductResponse>> GetPagedAsync(Guid userId, int skip, int take)
+    {
+        var products = await dbContext.Products
+            .Where(p => p.UserId == userId && p.IsActive)
+            .OrderByDescending(p => p.CreatedAt)
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync();
+
+        return products.Select(ToResponse).ToList();
+    }
+
     public async Task<ProductResponse> GetByIdAsync(Guid userId, Guid id)
     {
         var product = await FindOwnedActiveProduct(userId, id);
@@ -98,6 +112,21 @@ public class ProductService(AppDbContext dbContext) : IProductService
         }
 
         product.ImageUrl = imageUrl;
+        await dbContext.SaveChangesAsync();
+
+        return ToResponse(product);
+    }
+
+    public async Task<ProductResponse> DeleteImageAsync(Guid userId, Guid id)
+    {
+        var product = await FindOwnedActiveProduct(userId, id);
+
+        if (product is null)
+        {
+            throw new NotFoundException(nameof(Product), id);
+        }
+
+        product.ImageUrl = null;
         await dbContext.SaveChangesAsync();
 
         return ToResponse(product);

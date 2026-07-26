@@ -71,6 +71,21 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         return orders.Select(ToResponse).ToList();
     }
 
+    // Newest-first, matching the order the invoice list has always shown -
+    // a stable sort is required for Skip/Take to mean the same "page" twice.
+    public async Task<List<OrderResponse>> GetPagedAsync(Guid userId, int skip, int take)
+    {
+        var orders = await dbContext.Orders
+            .Include(o => o.Customer)
+            .Where(o => o.UserId == userId)
+            .OrderByDescending(o => o.CreatedAt)
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync();
+
+        return orders.Select(ToResponse).ToList();
+    }
+
     public async Task<OrderResponse> GetByIdAsync(Guid userId, Guid id)
     {
         var order = await FindOwnedOrder(userId, id);

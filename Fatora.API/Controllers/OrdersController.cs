@@ -30,10 +30,20 @@ public class OrdersController(
         return StatusCode(StatusCodes.Status201Created, result);
     }
 
+    // skip/take are optional and additive: omitting both preserves the
+    // original "return everything" behavior existing callers (customer
+    // invoice history, data export, barcode lookups) still rely on. Only the
+    // paginated invoice list passes them.
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll([FromQuery] int? skip, [FromQuery] int? take)
     {
-        var result = await orderService.GetAllAsync(User.GetUserId());
+        if (skip is null && take is null)
+        {
+            var all = await orderService.GetAllAsync(User.GetUserId());
+            return Ok(all);
+        }
+
+        var result = await orderService.GetPagedAsync(User.GetUserId(), skip ?? 0, Math.Clamp(take ?? 20, 1, 100));
         return Ok(result);
     }
 

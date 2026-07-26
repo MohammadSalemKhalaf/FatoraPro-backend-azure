@@ -1,5 +1,5 @@
-# @baseUrl = http://localhost:5050
-@baseUrl = https://fatora-607b.onrender.com
+@baseUrl = http://localhost:5050
+# @baseUrl = https://fatora-607b.onrender.com
 @adminToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5MGIwZjM0ZS1hMGEzLTRjZmMtYmY3Mi1jYjM3ZjA5YzkyNmUiLCJyb2xlIjoiQWRtaW4iLCJuYmYiOjE3ODQxMjcxNDIsImV4cCI6MTc4NDEyNzc0MiwiaWF0IjoxNzg0MTI3MTQyLCJpc3MiOiJsb2NhbGhvc3QiLCJhdWQiOiJsb2NhbGhvc3QifQ.MmWe3yGUHvLdfrFG5fk4rwwnmv3EfwhQm6P39tvx4hE
 @refreshToken = PASTE_REFRESH_TOKEN_HERE
 @salesRepToken =eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyYTM2MTExNC1hYWI5LTQzYjgtODQ2Mi1hMzlhNjhhMzViZjEiLCJyb2xlIjoiU2FsZXNSZXAiLCJuYmYiOjE3ODQxMjcxNzAsImV4cCI6MTc4NDEyNzc3MCwiaWF0IjoxNzg0MTI3MTcwLCJpc3MiOiJsb2NhbGhvc3QiLCJhdWQiOiJsb2NhbGhvc3QifQ.OCJBFDWz56egodvEanBU8scHkY2XUCHVddl5Tu4OPDU
@@ -16,7 +16,7 @@ content-Type: application/json
 
 {
   "UserName":"mbaboshi",
-  "Password":"azahazah1342@@"
+  "Password":"azah1342"
 }
 
 ### 2) Admin creates a new Sales Rep account
