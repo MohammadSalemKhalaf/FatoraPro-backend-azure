@@ -32,6 +32,7 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
     {
         var customers = await dbContext.Customers
             .Where(c => c.UserId == userId && c.IsActive)
+            .OrderByDescending(c => c.CreatedAt)
             .ToListAsync();
 
         return customers.Select(ToResponse).ToList();

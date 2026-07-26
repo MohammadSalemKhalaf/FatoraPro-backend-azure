@@ -35,6 +35,7 @@ public class ProductService(AppDbContext dbContext) : IProductService
     {
         var products = await dbContext.Products
             .Where(p => p.UserId == userId && p.IsActive)
+            .OrderByDescending(p => p.CreatedAt)
             .ToListAsync();
 
         return products.Select(ToResponse).ToList();
