@@ -1,13 +1,16 @@
+using System.Text.Json;
 using Fatora.BL.Exceptions;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
+using HttpJsonOptions = Microsoft.AspNetCore.Http.Json.JsonOptions;
 
 namespace Fatora.API.Exceptions;
 
 
 public sealed class GlobalExceptionHandler(
         ILogger<GlobalExceptionHandler> logger,
-        IProblemDetailsService problemDetailsService) : IExceptionHandler
+        IOptions<HttpJsonOptions> jsonOptions) : IExceptionHandler
     {
         public async ValueTask<bool> TryHandleAsync(
             HttpContext httpContext,
@@ -18,9 +21,6 @@ public sealed class GlobalExceptionHandler(
                 httpContext.TraceIdentifier);
 
             var (statusCode, title) = MapException(exception);
-
-            httpContext.Response.StatusCode = statusCode;
-            httpContext.Response.ContentType = "application/problem+json";
 
             var problemDetails = new ProblemDetails
             {
@@ -34,11 +34,18 @@ public sealed class GlobalExceptionHandler(
             problemDetails.Extensions["traceId"] = httpContext.TraceIdentifier;
             problemDetails.Extensions["timestamp"] = DateTime.UtcNow;
 
-            return await problemDetailsService.TryWriteAsync(new ProblemDetailsContext
-            {
-                HttpContext = httpContext,
-                ProblemDetails = problemDetails,
-            });
+            httpContext.Response.StatusCode = statusCode;
+            // Written directly rather than through IProblemDetailsService -
+            // its default writer unconditionally resets Content-Type to
+            // "application/problem+json" with no charset right after this
+            // runs, which makes strict clients (e.g. Dart's http package)
+            // fall back to Latin-1 and garble every Arabic error message.
+            httpContext.Response.ContentType = "application/problem+json; charset=utf-8";
+            await httpContext.Response.WriteAsync(
+                JsonSerializer.Serialize(problemDetails, jsonOptions.Value.SerializerOptions),
+                cancellationToken);
+
+            return true;
         }
 
         // Map the exceptions to HTTP responses
