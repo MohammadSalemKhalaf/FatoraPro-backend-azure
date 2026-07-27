@@ -314,7 +314,7 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         Status = ComputeStatus(order, DateOnly.FromDateTime(DateTime.UtcNow)),
         CustomerId = order.CustomerId,
         CustomerName = order.Customer.Name,
-        CustomerPhoneNumber = order.Customer.PhoneNumber,
+        CustomerPhoneNumber = order.Customer.PhoneNumber ?? string.Empty,
         CustomerStreet = order.Customer.Street,
         CustomerCity = order.Customer.City,
         CreatedAt = order.CreatedAt,

@@ -9,6 +9,5 @@ public class CreateCustomerRequestValidator : AbstractValidator<CreateCustomerRe
     public CreateCustomerRequestValidator()
     {
         RuleFor(x=>x.Name).NotEmpty().WithMessage("customer Name can not be empty");
-        RuleFor(x=>x.PhoneNumber).NotEmpty().WithMessage("customer Phone number can not be empty");
     }
 }

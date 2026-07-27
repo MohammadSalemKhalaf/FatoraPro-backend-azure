@@ -21,7 +21,6 @@ public class SyncPushRequestValidator : AbstractValidator<SyncPushRequest>
         {
             customer.RuleFor(c => c.Id).NotEqual(Guid.Empty);
             customer.RuleFor(c => c.Name).NotEmpty();
-            customer.RuleFor(c => c.PhoneNumber).NotEmpty();
             customer.RuleFor(c => c.Street).NotEmpty();
             customer.RuleFor(c => c.City).NotEmpty();
         });

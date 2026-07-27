@@ -10,7 +10,7 @@ public class Customer : ISyncableEntity
     public Guid Id { get; set; } = Guid.NewGuid();
     public required string Name { get; set; }
     public string? StoreName { get; set; }
-    public required string PhoneNumber { get; set; }
+    public string? PhoneNumber { get; set; }
     public required string Street { get; set; }
     public required string City { get; set; }
     public bool IsActive { get; set; } = true;

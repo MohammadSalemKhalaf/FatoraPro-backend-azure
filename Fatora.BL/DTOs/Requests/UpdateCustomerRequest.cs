@@ -5,7 +5,7 @@ using System.ComponentModel.DataAnnotations;
 public sealed record UpdateCustomerRequest(
     [Required] string Name,
     string? StoreName,
-    [Required] string PhoneNumber,
+    string? PhoneNumber,
     [Required] string Street,
     [Required] string City
 );
