@@ -25,6 +25,7 @@ public sealed record ProductSyncItem(
     [Required] string Name,
     string? Description,
     string? ImageUrl,
+    string? Barcode,
     decimal PurchasePrice,
     decimal SellPrice,
     bool IsActive,

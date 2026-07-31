@@ -130,6 +130,7 @@ public class SyncService(AppDbContext dbContext) : ISyncService
                     Name = item.Name,
                     Description = item.Description,
                     ImageUrl = item.ImageUrl,
+                    Barcode = item.Barcode,
                     PurchasePrice = item.PurchasePrice,
                     SellPrice = item.SellPrice,
                     IsActive = item.IsActive,
@@ -150,6 +151,7 @@ public class SyncService(AppDbContext dbContext) : ISyncService
             existing.Name = item.Name;
             existing.Description = item.Description;
             existing.ImageUrl = item.ImageUrl;
+            existing.Barcode = item.Barcode;
             existing.PurchasePrice = item.PurchasePrice;
             existing.SellPrice = item.SellPrice;
             existing.IsActive = item.IsActive;
@@ -218,6 +220,14 @@ public class SyncService(AppDbContext dbContext) : ISyncService
             if (item.UpdatedAt <= existing.UpdatedAt)
             {
                 return new SyncItemResult(item.Id, "Conflict", "Server has a newer or equal version; pull to reconcile.");
+            }
+
+            // Mirrors OrderService.UpdateAsync's same rule - the client is expected to block this
+            // locally before it ever reaches here (see OrdersRepository.update), so this is a
+            // backstop against a stale/offline edit that started before the order was marked paid.
+            if (OrderService.ComputeStatus(existing, DateOnly.FromDateTime(DateTime.UtcNow)) == "Paid")
+            {
+                return new SyncItemResult(item.Id, "Rejected", "Cannot edit an invoice that has already been paid in full.");
             }
 
             var newCustomer = await dbContext.Customers.FirstOrDefaultAsync(c => c.Id == item.CustomerId && c.UserId == userId);
