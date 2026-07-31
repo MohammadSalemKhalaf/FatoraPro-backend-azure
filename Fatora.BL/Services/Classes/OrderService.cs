@@ -107,6 +107,11 @@ public class OrderService(AppDbContext dbContext) : IOrderService
             throw new NotFoundException(nameof(Order), id);
         }
 
+        if (ComputeStatus(order, DateOnly.FromDateTime(DateTime.UtcNow)) == "Paid")
+        {
+            throw new BadRequestException("Cannot edit an invoice that has already been paid in full.");
+        }
+
         var customer = await FindOwnedActiveCustomer(userId, request.CustomerId);
 
         if (customer is null)
