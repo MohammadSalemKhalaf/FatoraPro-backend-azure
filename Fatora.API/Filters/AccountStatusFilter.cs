@@ -32,7 +32,7 @@ public sealed class AccountStatusFilter(AppDbContext dbContext) : IAsyncAuthoriz
         var status = UserService.ComputeAccountStatus(user);
         if (status is "Expired" or "Suspended")
         {
-            throw new ForbiddenException($"This account is {status.ToLowerInvariant()} and can no longer access the system.");
+            throw new ForbiddenException($"This account is {status.ToLowerInvariant()} and can no longer access the system.", AccountStatusErrorCodes.For(status));
         }
     }
 }

@@ -8,6 +8,18 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Fatora.BL.Services.Classes;
 
+// Machine-readable codes for the two ComputeAccountStatus outcomes that block access - shared by
+// every place that throws for them (LoginService, AccountStatusFilter, JwtTokenProviderService) so
+// the frontend can react precisely instead of string-matching the human-readable message.
+public static class AccountStatusErrorCodes
+{
+    public const string TrialExpired = "TRIAL_EXPIRED";
+    public const string AccountSuspended = "ACCOUNT_SUSPENDED";
+
+    public static string For(string accountStatus) =>
+        accountStatus == "Suspended" ? AccountSuspended : TrialExpired;
+}
+
 public class UserService(AppDbContext dbContext, IPasswordHasherService passwordHasher) : IUserService
 {
     public async Task<UserResponse> CreateSalesRepAsync(CreateSalesRepRequest request)

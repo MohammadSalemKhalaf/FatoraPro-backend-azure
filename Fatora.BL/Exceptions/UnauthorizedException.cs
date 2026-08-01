@@ -4,8 +4,8 @@ namespace Fatora.BL.Exceptions;
 
 public sealed class UnauthorizedException : AppException
 {
-    public UnauthorizedException(string message)
-        : base(message, HttpStatusCode.Unauthorized)
+    public UnauthorizedException(string message, string? errorCode = null)
+        : base(message, HttpStatusCode.Unauthorized, errorCode)
     {
     }
 }

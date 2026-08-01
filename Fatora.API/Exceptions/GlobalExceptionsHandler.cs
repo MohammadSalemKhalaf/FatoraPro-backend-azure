@@ -33,6 +33,10 @@ public sealed class GlobalExceptionHandler(
 
             problemDetails.Extensions["traceId"] = httpContext.TraceIdentifier;
             problemDetails.Extensions["timestamp"] = DateTime.UtcNow;
+            if (exception is AppException { ErrorCode: { } errorCode })
+            {
+                problemDetails.Extensions["code"] = errorCode;
+            }
 
             httpContext.Response.StatusCode = statusCode;
             // Written directly rather than through IProblemDetailsService -

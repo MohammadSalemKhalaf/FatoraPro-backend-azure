@@ -25,7 +25,7 @@ public class LoginService(AppDbContext dbContext, IPasswordHasherService passwor
         var status = UserService.ComputeAccountStatus(user);
         if (status is "Expired" or "Suspended")
         {
-            throw new UnauthorizedException($"This account is {status.ToLowerInvariant()}.");
+            throw new UnauthorizedException($"This account is {status.ToLowerInvariant()}.", AccountStatusErrorCodes.For(status));
         }
 
         return await jwtTokenProvider.GenerateToken(user);
