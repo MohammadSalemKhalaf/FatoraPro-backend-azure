@@ -35,7 +35,7 @@ public sealed record ProductSyncItem(
 public sealed record OrderSyncItem(
     [Required] Guid Id,
     [Required] Guid CustomerId,
-    DateOnly DueDate,
+    DateOnly? DueDate,
     [Range(0, 100)] decimal Discount,
     string? Notes,
     [Range(0, double.MaxValue)] decimal PaidAmount,

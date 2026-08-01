@@ -25,7 +25,7 @@ public class Order : ISyncableEntity
 
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
-    public DateOnly DueDate { get; set; }
+    public DateOnly? DueDate { get; set; }
 
 
     public Guid CustomerId { get; set; }

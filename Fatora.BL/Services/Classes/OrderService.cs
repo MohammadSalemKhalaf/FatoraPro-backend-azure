@@ -263,7 +263,9 @@ public class OrderService(AppDbContext dbContext) : IOrderService
             return "Paid";
         }
 
-        if (order.DueDate < today)
+        // A null due date (the user has due dates turned off) can never be
+        // overdue - there's nothing to be late against.
+        if (order.DueDate is { } dueDate && dueDate < today)
         {
             return "Overdue";
         }

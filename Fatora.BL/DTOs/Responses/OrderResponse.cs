@@ -12,7 +12,7 @@ public class OrderResponse
     public string CustomerCity { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
-    public DateOnly DueDate { get; set; }
+    public DateOnly? DueDate { get; set; }
     public decimal Discount { get; set; }
     public decimal CashDiscount { get; set; }
     public string? Notes { get; set; }
