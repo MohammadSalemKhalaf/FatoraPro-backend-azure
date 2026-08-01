@@ -30,7 +30,8 @@ public sealed record ProductSyncItem(
     decimal PurchasePrice,
     decimal SellPrice,
     bool IsActive,
-    DateTime UpdatedAt
+    DateTime UpdatedAt,
+    int? StockQuantity = null
 );
 
 public sealed record OrderSyncItem(

@@ -143,6 +143,7 @@ public class SyncService(AppDbContext dbContext) : ISyncService
                     Barcode = item.Barcode,
                     PurchasePrice = item.PurchasePrice,
                     SellPrice = item.SellPrice,
+                    StockQuantity = item.StockQuantity,
                     IsActive = item.IsActive,
                     UserId = userId,
                     CreatedAt = item.UpdatedAt,
@@ -164,6 +165,7 @@ public class SyncService(AppDbContext dbContext) : ISyncService
             existing.Barcode = item.Barcode;
             existing.PurchasePrice = item.PurchasePrice;
             existing.SellPrice = item.SellPrice;
+            existing.StockQuantity = item.StockQuantity;
             existing.IsActive = item.IsActive;
             existing.UpdatedAt = item.UpdatedAt;
 
@@ -223,6 +225,11 @@ public class SyncService(AppDbContext dbContext) : ISyncService
                 OrderService.ValidateCashDiscount(order.OrderItems, item.Discount, item.CashDiscount);
                 order.CashDiscount = item.CashDiscount;
 
+                foreach (var lineItem in item.Items)
+                {
+                    AdjustStock(productsById[lineItem.ProductId], -lineItem.Quantity);
+                }
+
                 dbContext.Orders.Add(order);
                 await dbContext.SaveChangesAsync();
                 return new SyncItemResult(item.Id, "Applied");
@@ -263,6 +270,16 @@ public class SyncService(AppDbContext dbContext) : ISyncService
             existing.CoveredByReceipt = item.CoveredByReceipt;
             existing.UpdatedAt = item.UpdatedAt;
 
+            // Restore stock for whatever this order was previously charging
+            // before removing those line items below, then decrement for
+            // the new ones - a product common to both nets out correctly
+            // since existing.OrderItems[].Product and newProductsById are
+            // the same tracked instances within this DbContext.
+            foreach (var oldItem in existing.OrderItems)
+            {
+                AdjustStock(oldItem.Product, oldItem.Quantity);
+            }
+
             // Managed directly through the DbSet (not via the existing.OrderItems navigation setter) -
             // replacing a required collection navigation by reassigning it confuses EF's change tracker
             // into generating an UPDATE against the row it just DELETEd instead of an INSERT.
@@ -277,6 +294,11 @@ public class SyncService(AppDbContext dbContext) : ISyncService
             }).ToList();
             dbContext.OrderItems.AddRange(newItems);
 
+            foreach (var lineItem in item.Items)
+            {
+                AdjustStock(newProductsById[lineItem.ProductId], -lineItem.Quantity);
+            }
+
             OrderService.ValidateCashDiscount(newItems, item.Discount, item.CashDiscount);
             existing.CashDiscount = item.CashDiscount;
 
@@ -286,6 +308,16 @@ public class SyncService(AppDbContext dbContext) : ISyncService
         catch (Exception ex)
         {
             return new SyncItemResult(item.Id, "Rejected", ex.Message);
+        }
+    }
+
+    // Never validated/clamped here - see Product.StockQuantity: a sale must
+    // never be blocked by insufficient stock, negative is allowed.
+    private static void AdjustStock(Product product, int delta)
+    {
+        if (product.StockQuantity is { } stock)
+        {
+            product.StockQuantity = stock + delta;
         }
     }
 
@@ -348,6 +380,12 @@ public class SyncService(AppDbContext dbContext) : ISyncService
 
             if (order is not null)
             {
+                // OrderItems (and their Product) are auto-included - see
+                // OrderConfiguration/ItemConfiguration.
+                foreach (var lineItem in order.OrderItems)
+                {
+                    AdjustStock(lineItem.Product, lineItem.Quantity);
+                }
                 dbContext.Orders.Remove(order);
                 await dbContext.SaveChangesAsync();
             }

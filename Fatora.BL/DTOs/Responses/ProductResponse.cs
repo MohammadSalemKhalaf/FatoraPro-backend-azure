@@ -9,6 +9,7 @@ public class ProductResponse
     public string? Barcode { get; set; }
     public decimal PurchasePrice { get; set; }
     public decimal SellPrice { get; set; }
+    public int? StockQuantity { get; set; }
     public bool IsActive { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }

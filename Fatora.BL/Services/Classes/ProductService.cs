@@ -22,6 +22,7 @@ public class ProductService(AppDbContext dbContext) : IProductService
             PurchasePrice = request.PurchasePrice,
             SellPrice = request.SellPrice,
             Barcode = request.Barcode,
+            StockQuantity = request.StockQuantity,
             UserId = userId
         };
 
@@ -84,6 +85,7 @@ public class ProductService(AppDbContext dbContext) : IProductService
         product.PurchasePrice = request.PurchasePrice;
         product.SellPrice = request.SellPrice;
         product.Barcode = request.Barcode;
+        product.StockQuantity = request.StockQuantity;
 
         await dbContext.SaveChangesAsync();
 
@@ -198,6 +200,7 @@ public class ProductService(AppDbContext dbContext) : IProductService
         Barcode = product.Barcode,
         PurchasePrice = product.PurchasePrice,
         SellPrice = product.SellPrice,
+        StockQuantity = product.StockQuantity,
         IsActive = product.IsActive,
         CreatedAt = product.CreatedAt,
         UpdatedAt = product.UpdatedAt

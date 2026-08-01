@@ -54,6 +54,11 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         ValidateCashDiscount(order.OrderItems, request.Discount, request.CashDiscount);
         order.CashDiscount = request.CashDiscount;
 
+        foreach (var lineItem in request.Items)
+        {
+            AdjustStock(productsById[lineItem.ProductId], -lineItem.Quantity);
+        }
+
         dbContext.Orders.Add(order);
         await dbContext.SaveChangesAsync();
 
@@ -131,6 +136,16 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         order.Discount = request.Discount;
         order.Notes = request.Notes;
 
+        // Restore stock for whatever this order was previously charging
+        // before removing those line items below, then decrement for the
+        // new ones - a product common to both nets out correctly since
+        // order.OrderItems[].Product and productsById are the same tracked
+        // instances within this DbContext.
+        foreach (var oldItem in order.OrderItems)
+        {
+            AdjustStock(oldItem.Product, oldItem.Quantity);
+        }
+
         // Managed directly through the DbSet (not via the order.OrderItems navigation setter) -
         // replacing a required collection navigation by reassigning it confuses EF's change tracker
         // into generating an UPDATE against the row it just DELETEd instead of an INSERT.
@@ -144,6 +159,11 @@ public class OrderService(AppDbContext dbContext) : IOrderService
             UnitPrice = productsById[i.ProductId].SellPrice
         }).ToList();
         dbContext.OrderItems.AddRange(newItems);
+
+        foreach (var lineItem in request.Items)
+        {
+            AdjustStock(productsById[lineItem.ProductId], -lineItem.Quantity);
+        }
 
         // Validated against newItems directly, not order.Subtotal - assigning to the OrderItems
         // navigation before SaveChanges is what caused the earlier EF change-tracker bug, so it's
@@ -166,6 +186,13 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         if (order is null)
         {
             throw new NotFoundException(nameof(Order), id);
+        }
+
+        // OrderItems (and their Product) are auto-included - see
+        // OrderConfiguration/ItemConfiguration.
+        foreach (var lineItem in order.OrderItems)
+        {
+            AdjustStock(lineItem.Product, lineItem.Quantity);
         }
 
         dbContext.Orders.Remove(order);
@@ -253,6 +280,16 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         {
             throw new BadRequestException(
                 $"Cash discount ({cashDiscount}) exceeds the payable amount ({payableAfterPercentageDiscount}).");
+        }
+    }
+
+    // Never validated/clamped here - see Product.StockQuantity: a sale must
+    // never be blocked by insufficient stock, negative is allowed.
+    private static void AdjustStock(Product product, int delta)
+    {
+        if (product.StockQuantity is { } stock)
+        {
+            product.StockQuantity = stock + delta;
         }
     }
 

@@ -14,6 +14,10 @@ public class Product : ISyncableEntity
     public string? Barcode { get; set; }
     public decimal PurchasePrice { get; set; }
     public decimal SellPrice { get; set; }
+    // Null = stock isn't tracked for this product (the Settings toggle is
+    // off, or the user never set a quantity). Never validated/clamped -
+    // sales must never be blocked by it, so it's allowed to go negative.
+    public int? StockQuantity { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
