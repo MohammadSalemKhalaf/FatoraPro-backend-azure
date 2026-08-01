@@ -6,6 +6,6 @@ public sealed record CreateCustomerRequest(
     [Required] string Name,
     string? StoreName,
     string? PhoneNumber,
-    [Required] string Street,
-    [Required] string City
+    string? Street,
+    string? City
 );

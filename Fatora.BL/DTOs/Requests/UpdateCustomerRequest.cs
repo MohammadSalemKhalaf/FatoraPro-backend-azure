@@ -6,6 +6,6 @@ public sealed record UpdateCustomerRequest(
     [Required] string Name,
     string? StoreName,
     string? PhoneNumber,
-    [Required] string Street,
-    [Required] string City
+    string? Street,
+    string? City
 );
