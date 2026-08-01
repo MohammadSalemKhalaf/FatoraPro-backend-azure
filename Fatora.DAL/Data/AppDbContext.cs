@@ -17,6 +17,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<PasswordResetOtp> PasswordResetOtps { get; set; }
 
     public DbSet<Order> Orders { get; set; }
+    public DbSet<Receipt> Receipts { get; set; }
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

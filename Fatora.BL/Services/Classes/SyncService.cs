@@ -34,6 +34,11 @@ public class SyncService(AppDbContext dbContext) : ISyncService
             response.Orders.Add(await PushOrderAsync(userId, item));
         }
 
+        foreach (var item in request.Receipts)
+        {
+            response.Receipts.Add(await PushReceiptAsync(userId, item));
+        }
+
         foreach (var orderId in request.DeletedOrderIds)
         {
             response.DeletedOrders.Add(await DeleteOrderAsync(userId, orderId));
@@ -59,12 +64,17 @@ public class SyncService(AppDbContext dbContext) : ISyncService
             .Where(o => o.UserId == userId && o.UpdatedAt > since)
             .ToListAsync();
 
+        var receipts = await dbContext.Receipts
+            .Where(r => r.UserId == userId && r.UpdatedAt > since)
+            .ToListAsync();
+
         return new SyncPullResponse
         {
             ServerTime = serverTime,
             Customers = customers.Select(CustomerService.ToResponse).ToList(),
             Products = products.Select(ProductService.ToResponse).ToList(),
-            Orders = orders.Select(OrderService.ToResponse).ToList()
+            Orders = orders.Select(OrderService.ToResponse).ToList(),
+            Receipts = receipts.Select(ReceiptService.ToResponse).ToList()
         };
     }
 
@@ -198,6 +208,7 @@ public class SyncService(AppDbContext dbContext) : ISyncService
                     Discount = item.Discount,
                     Notes = item.Notes,
                     PaidAmount = item.PaidAmount,
+                    CoveredByReceipt = item.CoveredByReceipt,
                     CreatedAt = item.UpdatedAt,
                     UpdatedAt = item.UpdatedAt,
                     OrderItems = item.Items.Select(i => new OrderItem
@@ -249,6 +260,7 @@ public class SyncService(AppDbContext dbContext) : ISyncService
             existing.Discount = item.Discount;
             existing.Notes = item.Notes;
             existing.PaidAmount = item.PaidAmount;
+            existing.CoveredByReceipt = item.CoveredByReceipt;
             existing.UpdatedAt = item.UpdatedAt;
 
             // Managed directly through the DbSet (not via the existing.OrderItems navigation setter) -
@@ -267,6 +279,57 @@ public class SyncService(AppDbContext dbContext) : ISyncService
 
             OrderService.ValidateCashDiscount(newItems, item.Discount, item.CashDiscount);
             existing.CashDiscount = item.CashDiscount;
+
+            await dbContext.SaveChangesAsync();
+            return new SyncItemResult(item.Id, "Applied");
+        }
+        catch (Exception ex)
+        {
+            return new SyncItemResult(item.Id, "Rejected", ex.Message);
+        }
+    }
+
+    // Mirrors PushCustomerAsync: no dedicated REST endpoint exists for
+    // receipts, they're created/updated/soft-deleted (IsActive = false)
+    // purely through this sync path, same as customers.
+    private async Task<SyncItemResult> PushReceiptAsync(Guid userId, ReceiptSyncItem item)
+    {
+        try
+        {
+            var existing = await dbContext.Receipts.FirstOrDefaultAsync(r => r.Id == item.Id && r.UserId == userId);
+
+            if (existing is null)
+            {
+                var customer = await dbContext.Customers.FirstOrDefaultAsync(c => c.Id == item.CustomerId && c.UserId == userId);
+
+                if (customer is null)
+                {
+                    return new SyncItemResult(item.Id, "Rejected", "Customer not found.");
+                }
+
+                dbContext.Receipts.Add(new Receipt
+                {
+                    Id = item.Id,
+                    CustomerId = customer.Id,
+                    Amount = item.Amount,
+                    IsActive = item.IsActive,
+                    UserId = userId,
+                    CreatedAt = item.UpdatedAt,
+                    UpdatedAt = item.UpdatedAt
+                });
+
+                await dbContext.SaveChangesAsync();
+                return new SyncItemResult(item.Id, "Applied");
+            }
+
+            if (item.UpdatedAt <= existing.UpdatedAt)
+            {
+                return new SyncItemResult(item.Id, "Conflict", "Server has a newer or equal version; pull to reconcile.");
+            }
+
+            existing.Amount = item.Amount;
+            existing.IsActive = item.IsActive;
+            existing.UpdatedAt = item.UpdatedAt;
 
             await dbContext.SaveChangesAsync();
             return new SyncItemResult(item.Id, "Applied");

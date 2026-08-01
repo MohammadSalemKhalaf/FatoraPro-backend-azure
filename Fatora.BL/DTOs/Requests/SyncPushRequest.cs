@@ -6,6 +6,7 @@ public sealed record SyncPushRequest(
     List<CustomerSyncItem> Customers,
     List<ProductSyncItem> Products,
     List<OrderSyncItem> Orders,
+    List<ReceiptSyncItem> Receipts,
     List<Guid> DeletedOrderIds
 );
 
@@ -41,11 +42,20 @@ public sealed record OrderSyncItem(
     [Range(0, double.MaxValue)] decimal PaidAmount,
     DateTime UpdatedAt,
     [Required, MinLength(1)] List<OrderItemSyncItem> Items,
-    [Range(0, double.MaxValue)] decimal CashDiscount = 0m
+    [Range(0, double.MaxValue)] decimal CashDiscount = 0m,
+    bool CoveredByReceipt = false
 );
 
 public sealed record OrderItemSyncItem(
     [Required] Guid ProductId,
     [Range(1, int.MaxValue)] int Quantity,
     [Range(0.01, double.MaxValue)] decimal UnitPrice
+);
+
+public sealed record ReceiptSyncItem(
+    [Required] Guid Id,
+    [Required] Guid CustomerId,
+    [Range(0.01, double.MaxValue)] decimal Amount,
+    bool IsActive,
+    DateTime UpdatedAt
 );

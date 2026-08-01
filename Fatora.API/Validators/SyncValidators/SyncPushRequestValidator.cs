@@ -49,6 +49,13 @@ public class SyncPushRequestValidator : AbstractValidator<SyncPushRequest>
                 item.RuleFor(i => i.UnitPrice).GreaterThan(0);
             });
         });
+
+        RuleForEach(x => x.Receipts).ChildRules(receipt =>
+        {
+            receipt.RuleFor(r => r.Id).NotEqual(Guid.Empty);
+            receipt.RuleFor(r => r.CustomerId).NotEqual(Guid.Empty);
+            receipt.RuleFor(r => r.Amount).GreaterThan(0);
+        });
     }
 
     private static bool HaveAReasonableBatchSize(SyncPushRequest request)
@@ -57,6 +64,7 @@ public class SyncPushRequestValidator : AbstractValidator<SyncPushRequest>
             + request.Products.Count
             + request.Orders.Count
             + request.Orders.Sum(o => o.Items.Count)
+            + request.Receipts.Count
             + request.DeletedOrderIds.Count;
 
         return total <= MaxItemsPerBatch;

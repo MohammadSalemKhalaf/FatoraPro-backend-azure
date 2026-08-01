@@ -335,6 +335,7 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         Total = order.Total,
         PaidAmount = order.PaidAmount,
         RemainingBalance = order.RemainingBalance,
+        CoveredByReceipt = order.CoveredByReceipt,
         Items = order.OrderItems.Select(oi => new OrderItemResponse
         {
             ProductId = oi.ProductId,

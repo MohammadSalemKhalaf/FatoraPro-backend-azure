@@ -21,6 +21,7 @@ public static class GroupRegistrations
         Services.AddScoped<IProductService, ProductService>();
         Services.AddScoped<ICustomerService, CustomerService>();
         Services.AddScoped<IOrderService, OrderService>();
+        Services.AddScoped<IReceiptService, ReceiptService>();
         Services.AddScoped<IReportService, ReportService>();
         Services.AddScoped<IFileStorageService, FileStorageService>();
         Services.AddScoped<ISyncService, SyncService>();

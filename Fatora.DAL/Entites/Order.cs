@@ -23,6 +23,12 @@ public class Order : ISyncableEntity
     public decimal PaidAmount { get; set; }
     public decimal RemainingBalance => Total - PaidAmount;
 
+    // Set only by the customer-level "close outstanding invoices" action once
+    // their debt is fully covered by general receipts - never by a real
+    // payment. Purely additive display metadata: it never changes PaidAmount
+    // or the computed Status (see OrderService.ComputeStatus).
+    public bool CoveredByReceipt { get; set; }
+
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
     public DateOnly? DueDate { get; set; }
