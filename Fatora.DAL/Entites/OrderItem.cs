@@ -11,6 +11,12 @@ public class OrderItem
     public int Quantity { get; set; }
     public decimal UnitPrice { get; set; }
 
+    // True when this line was added, or had its quantity/price changed,
+    // by an edit after the invoice's original creation - see Order.IsEdited
+    // for the same idea at the whole-invoice level. Never true for an item
+    // that was already on the invoice and is untouched by the current save.
+    public bool IsEdited { get; set; }
+
     public decimal TotalPrice => UnitPrice * Quantity;
 
     public Guid OrderId { get; set; }

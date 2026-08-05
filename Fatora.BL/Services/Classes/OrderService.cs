@@ -160,14 +160,20 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         // Managed directly through the DbSet (not via the order.OrderItems navigation setter) -
         // replacing a required collection navigation by reassigning it confuses EF's change tracker
         // into generating an UPDATE against the row it just DELETEd instead of an INSERT.
+        var previousItems = order.OrderItems.ToList();
         dbContext.OrderItems.RemoveRange(order.OrderItems);
-        var newItems = request.Items.Select(i => new OrderItem
+        var newItems = request.Items.Select(i =>
         {
-            OrderId = order.Id,
-            ProductId = i.ProductId,
-            Product = productsById[i.ProductId],
-            Quantity = i.Quantity,
-            UnitPrice = i.UnitPrice ?? productsById[i.ProductId].SellPrice
+            var unitPrice = i.UnitPrice ?? productsById[i.ProductId].SellPrice;
+            return new OrderItem
+            {
+                OrderId = order.Id,
+                ProductId = i.ProductId,
+                Product = productsById[i.ProductId],
+                Quantity = i.Quantity,
+                UnitPrice = unitPrice,
+                IsEdited = ResolveItemIsEdited(previousItems, i.ProductId, i.Quantity, unitPrice)
+            };
         }).ToList();
         dbContext.OrderItems.AddRange(newItems);
 
@@ -313,6 +319,29 @@ public class OrderService(AppDbContext dbContext) : IOrderService
             incomingByProduct.TryGetValue(pair.Key, out var line) && line == pair.Value);
     }
 
+    // Per-item mirror of the check above, for the small green "معدّل" marker
+    // on an individual line rather than the whole invoice: a product with no
+    // match in the prior item set is a newly-added line (edited), a matched
+    // one with a different quantity or price was tampered with (edited), and
+    // a matched, unchanged one carries over whatever its own IsEdited flag
+    // already was - so a line's audit trail survives a later save that
+    // doesn't touch it again. Shared by OrderService.UpdateAsync and
+    // SyncService.PushOrderAsync, same as OrderItemsMatch above.
+    internal static bool ResolveItemIsEdited(
+        ICollection<OrderItem> existing,
+        Guid productId,
+        int quantity,
+        decimal unitPrice)
+    {
+        var previous = existing.FirstOrDefault(i => i.ProductId == productId);
+        if (previous is null)
+        {
+            return true;
+        }
+
+        return previous.Quantity != quantity || previous.UnitPrice != unitPrice || previous.IsEdited;
+    }
+
     // Never validated/clamped here - see Product.StockQuantity: a sale must
     // never be blocked by insufficient stock, negative is allowed.
     private static void AdjustStock(Product product, int delta)
@@ -412,7 +441,8 @@ public class OrderService(AppDbContext dbContext) : IOrderService
             ProductImageUrl = oi.Product.ImageUrl,
             Quantity = oi.Quantity,
             UnitPrice = oi.UnitPrice,
-            TotalPrice = oi.TotalPrice
+            TotalPrice = oi.TotalPrice,
+            IsEdited = oi.IsEdited
         }).ToList()
     };
 }

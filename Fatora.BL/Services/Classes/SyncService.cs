@@ -293,6 +293,7 @@ public class SyncService(AppDbContext dbContext) : ISyncService
             // Managed directly through the DbSet (not via the existing.OrderItems navigation setter) -
             // replacing a required collection navigation by reassigning it confuses EF's change tracker
             // into generating an UPDATE against the row it just DELETEd instead of an INSERT.
+            var previousItems = existing.OrderItems.ToList();
             dbContext.OrderItems.RemoveRange(existing.OrderItems);
             var newItems = item.Items.Select(i => new OrderItem
             {
@@ -300,7 +301,8 @@ public class SyncService(AppDbContext dbContext) : ISyncService
                 ProductId = i.ProductId,
                 Product = newProductsById[i.ProductId],
                 Quantity = i.Quantity,
-                UnitPrice = i.UnitPrice
+                UnitPrice = i.UnitPrice,
+                IsEdited = OrderService.ResolveItemIsEdited(previousItems, i.ProductId, i.Quantity, i.UnitPrice)
             }).ToList();
             dbContext.OrderItems.AddRange(newItems);
 
