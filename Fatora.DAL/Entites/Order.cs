@@ -29,6 +29,14 @@ public class Order : ISyncableEntity
     // or the computed Status (see OrderService.ComputeStatus).
     public bool CoveredByReceipt { get; set; }
 
+    // Set whenever a real edit (customer, discount, or line items) changes
+    // what this invoice actually says, at which point InvoiceNumber is also
+    // reissued - see OrderService.UpdateAsync/SyncService.PushOrderAsync.
+    // Purely additive audit metadata: it never hides or replaces anything
+    // else on the invoice, it's just visible proof the invoice was edited
+    // after its original number was issued.
+    public bool IsEdited { get; set; }
+
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
     public DateOnly? DueDate { get; set; }

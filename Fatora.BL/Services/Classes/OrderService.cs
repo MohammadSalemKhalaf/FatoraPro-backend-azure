@@ -131,10 +131,20 @@ public class OrderService(AppDbContext dbContext) : IOrderService
             throw new NotFoundException("One or more products", string.Join(",", request.Items.Select(i => i.ProductId)));
         }
 
+        var isEdit = order.CustomerId != customer.Id
+            || order.Discount != request.Discount
+            || !OrderItemsMatch(order.OrderItems, request.Items.Select(i => (i.ProductId, i.Quantity)));
+
         order.CustomerId = customer.Id;
         order.DueDate = request.DueDate;
         order.Discount = request.Discount;
         order.Notes = request.Notes;
+
+        if (isEdit)
+        {
+            order.InvoiceNumber = await GenerateInvoiceNumberAsync(userId);
+            order.IsEdited = true;
+        }
 
         // Restore stock for whatever this order was previously charging
         // before removing those line items below, then decrement for the
@@ -283,6 +293,25 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         }
     }
 
+    // Order-independent: what matters is which products and quantities are
+    // on the invoice, not the order they happen to be listed in. Shared by
+    // OrderService.UpdateAsync and SyncService.PushOrderAsync so both
+    // decide "was this invoice actually edited" the same way.
+    internal static bool OrderItemsMatch(
+        ICollection<OrderItem> existing,
+        IEnumerable<(Guid ProductId, int Quantity)> incoming)
+    {
+        var existingByProduct = existing.ToDictionary(i => i.ProductId, i => i.Quantity);
+        var incomingByProduct = incoming.ToDictionary(i => i.ProductId, i => i.Quantity);
+        if (existingByProduct.Count != incomingByProduct.Count)
+        {
+            return false;
+        }
+
+        return existingByProduct.All(pair =>
+            incomingByProduct.TryGetValue(pair.Key, out var quantity) && quantity == pair.Value);
+    }
+
     // Never validated/clamped here - see Product.StockQuantity: a sale must
     // never be blocked by insufficient stock, negative is allowed.
     private static void AdjustStock(Product product, int delta)
@@ -373,6 +402,7 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         PaidAmount = order.PaidAmount,
         RemainingBalance = order.RemainingBalance,
         CoveredByReceipt = order.CoveredByReceipt,
+        IsEdited = order.IsEdited,
         Items = order.OrderItems.Select(oi => new OrderItemResponse
         {
             ProductId = oi.ProductId,

@@ -262,6 +262,10 @@ public class SyncService(AppDbContext dbContext) : ISyncService
                 return new SyncItemResult(item.Id, "Rejected", "One or more products not found.");
             }
 
+            var isEdit = existing.CustomerId != newCustomer.Id
+                || existing.Discount != item.Discount
+                || !OrderService.OrderItemsMatch(existing.OrderItems, item.Items.Select(i => (i.ProductId, i.Quantity)));
+
             existing.CustomerId = newCustomer.Id;
             existing.DueDate = item.DueDate;
             existing.Discount = item.Discount;
@@ -269,6 +273,12 @@ public class SyncService(AppDbContext dbContext) : ISyncService
             existing.PaidAmount = item.PaidAmount;
             existing.CoveredByReceipt = item.CoveredByReceipt;
             existing.UpdatedAt = item.UpdatedAt;
+
+            if (isEdit)
+            {
+                existing.InvoiceNumber = await GenerateInvoiceNumberAsync(userId);
+                existing.IsEdited = true;
+            }
 
             // Restore stock for whatever this order was previously charging
             // before removing those line items below, then decrement for
