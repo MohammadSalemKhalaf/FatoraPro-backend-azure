@@ -133,6 +133,7 @@ public class OrderService(AppDbContext dbContext) : IOrderService
 
         var isEdit = order.CustomerId != customer.Id
             || order.Discount != request.Discount
+            || order.CashDiscount != request.CashDiscount
             || !OrderItemsMatch(order.OrderItems, request.Items.Select(i =>
                 (i.ProductId, i.Quantity, i.UnitPrice ?? productsById[i.ProductId].SellPrice)));
 

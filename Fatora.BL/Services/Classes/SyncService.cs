@@ -264,6 +264,7 @@ public class SyncService(AppDbContext dbContext) : ISyncService
 
             var isEdit = existing.CustomerId != newCustomer.Id
                 || existing.Discount != item.Discount
+                || existing.CashDiscount != item.CashDiscount
                 || !OrderService.OrderItemsMatch(existing.OrderItems, item.Items.Select(i => (i.ProductId, i.Quantity, i.UnitPrice)));
 
             existing.CustomerId = newCustomer.Id;
