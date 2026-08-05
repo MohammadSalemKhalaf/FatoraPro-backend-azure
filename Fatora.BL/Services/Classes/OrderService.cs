@@ -47,7 +47,7 @@ public class OrderService(AppDbContext dbContext) : IOrderService
                 ProductId = i.ProductId,
                 Product = productsById[i.ProductId],
                 Quantity = i.Quantity,
-                UnitPrice = productsById[i.ProductId].SellPrice
+                UnitPrice = i.UnitPrice ?? productsById[i.ProductId].SellPrice
             }).ToList()
         };
 
@@ -133,7 +133,8 @@ public class OrderService(AppDbContext dbContext) : IOrderService
 
         var isEdit = order.CustomerId != customer.Id
             || order.Discount != request.Discount
-            || !OrderItemsMatch(order.OrderItems, request.Items.Select(i => (i.ProductId, i.Quantity)));
+            || !OrderItemsMatch(order.OrderItems, request.Items.Select(i =>
+                (i.ProductId, i.Quantity, i.UnitPrice ?? productsById[i.ProductId].SellPrice)));
 
         order.CustomerId = customer.Id;
         order.DueDate = request.DueDate;
@@ -166,7 +167,7 @@ public class OrderService(AppDbContext dbContext) : IOrderService
             ProductId = i.ProductId,
             Product = productsById[i.ProductId],
             Quantity = i.Quantity,
-            UnitPrice = productsById[i.ProductId].SellPrice
+            UnitPrice = i.UnitPrice ?? productsById[i.ProductId].SellPrice
         }).ToList();
         dbContext.OrderItems.AddRange(newItems);
 
@@ -299,17 +300,17 @@ public class OrderService(AppDbContext dbContext) : IOrderService
     // decide "was this invoice actually edited" the same way.
     internal static bool OrderItemsMatch(
         ICollection<OrderItem> existing,
-        IEnumerable<(Guid ProductId, int Quantity)> incoming)
+        IEnumerable<(Guid ProductId, int Quantity, decimal UnitPrice)> incoming)
     {
-        var existingByProduct = existing.ToDictionary(i => i.ProductId, i => i.Quantity);
-        var incomingByProduct = incoming.ToDictionary(i => i.ProductId, i => i.Quantity);
+        var existingByProduct = existing.ToDictionary(i => i.ProductId, i => (i.Quantity, i.UnitPrice));
+        var incomingByProduct = incoming.ToDictionary(i => i.ProductId, i => (i.Quantity, i.UnitPrice));
         if (existingByProduct.Count != incomingByProduct.Count)
         {
             return false;
         }
 
         return existingByProduct.All(pair =>
-            incomingByProduct.TryGetValue(pair.Key, out var quantity) && quantity == pair.Value);
+            incomingByProduct.TryGetValue(pair.Key, out var line) && line == pair.Value);
     }
 
     // Never validated/clamped here - see Product.StockQuantity: a sale must

@@ -4,5 +4,6 @@ using System.ComponentModel.DataAnnotations;
 
 public sealed record OrderItemRequest(
     [Required] Guid ProductId,
-    [Range(1, int.MaxValue)] int Quantity
+    [Range(1, int.MaxValue)] int Quantity,
+    [Range(0.01, double.MaxValue)] decimal? UnitPrice = null
 );
