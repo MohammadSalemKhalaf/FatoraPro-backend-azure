@@ -25,6 +25,14 @@ public class Product : ISyncableEntity
     public Guid UserId { get; set; }
     public User User { get; set; }
 
+    // Only ever set for a product created by a Restricted-mode Rep (see
+    // ProductService.CreateAsync) - null for everything the owner created,
+    // and for anything created by an All-mode Rep (not offered to them; an
+    // All-mode Rep already sees the owner's whole shared catalog and has no
+    // need for a product of their own). Mirrors Order/Customer.CreatedByRepId.
+    public Guid? CreatedByRepId { get; set; }
+    public Rep? CreatedByRep { get; set; }
+
     public List<OrderItem> Products { get; set; } = new List<OrderItem>();
-  
+
 }

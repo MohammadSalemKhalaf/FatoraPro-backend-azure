@@ -10,8 +10,24 @@ namespace Fatora.BL.Services.Classes;
 
 public class ProductService(AppDbContext dbContext) : IProductService
 {
-    public async Task<ProductResponse> CreateAsync(Guid userId, CreateProductRequest request)
+    public async Task<ProductResponse> CreateAsync(Guid userId, CreateProductRequest request, Guid? createdByRepId = null)
     {
+        // A Rep can only ever create its own product while Restricted - an
+        // All-mode Rep already sees (and orders from) the owner's whole
+        // shared catalog and has no product of "its own" to create; letting
+        // one create products anyway would just silently add un-owned rows
+        // to the owner's shared catalog with no picker to ever manage them.
+        // Checked here (not just hidden in the UI) since this is a real
+        // permission boundary, not a display preference.
+        if (createdByRepId is not null)
+        {
+            var rep = await dbContext.Reps.FirstOrDefaultAsync(r => r.Id == createdByRepId);
+            if (rep is null || rep.ProductAccessMode != AccessMode.Restricted)
+            {
+                throw new ForbiddenException("لا يمكن إنشاء أصناف إلا لمندوب بوضع وصول مقيّد.");
+            }
+        }
+
         await EnsureBarcodeAvailableAsync(userId, request.Barcode, excludingProductId: null);
 
         var product = new Product
@@ -23,7 +39,8 @@ public class ProductService(AppDbContext dbContext) : IProductService
             SellPrice = request.SellPrice,
             Barcode = request.Barcode,
             StockQuantity = request.StockQuantity,
-            UserId = userId
+            UserId = userId,
+            CreatedByRepId = createdByRepId
         };
 
         dbContext.Products.Add(product);
@@ -66,11 +83,14 @@ public class ProductService(AppDbContext dbContext) : IProductService
         return ToResponse(product);
     }
 
-    public async Task<ProductResponse> UpdateAsync(Guid userId, Guid id, UpdateProductRequest request)
+    public async Task<ProductResponse> UpdateAsync(Guid userId, Guid id, UpdateProductRequest request, Guid? scopeToRepId = null)
     {
         var product = await FindOwnedActiveProduct(userId, id);
 
-        if (product is null)
+        // A Rep can only ever edit a product it created itself - never one
+        // it merely has read access to (via RepProductAccess or the owner's
+        // own catalog), same distinction as the create-time restriction.
+        if (product is null || !IsOwnRepCreation(product, scopeToRepId))
         {
             throw new NotFoundException(nameof(Product), id);
         }
@@ -133,11 +153,11 @@ public class ProductService(AppDbContext dbContext) : IProductService
         return ToResponse(product);
     }
 
-    public async Task DeleteAsync(Guid userId, Guid id)
+    public async Task DeleteAsync(Guid userId, Guid id, Guid? scopeToRepId = null)
     {
         var product = await FindOwnedActiveProduct(userId, id);
 
-        if (product is null)
+        if (product is null || !IsOwnRepCreation(product, scopeToRepId))
         {
             throw new NotFoundException(nameof(Product), id);
         }
@@ -146,11 +166,12 @@ public class ProductService(AppDbContext dbContext) : IProductService
         await dbContext.SaveChangesAsync();
     }
 
-    public async Task<List<ProductResponse>> GetArchivedAsync(Guid userId)
+    public async Task<List<ProductResponse>> GetArchivedAsync(Guid userId, Guid? scopeToRepId = null)
     {
-        var products = await dbContext.Products
-            .Where(p => p.UserId == userId && !p.IsActive)
-            .ToListAsync();
+        var query = dbContext.Products.Where(p => p.UserId == userId && !p.IsActive);
+        query = await ApplyRepScopeAsync(query, scopeToRepId);
+
+        var products = await query.ToListAsync();
 
         return products.Select(ToResponse).ToList();
     }
@@ -187,8 +208,10 @@ public class ProductService(AppDbContext dbContext) : IProductService
         await dbContext.Products.FirstOrDefaultAsync(p => p.Id == id && p.UserId == userId && p.IsActive);
 
     // Null scopeToRepId (the owner, or a Rep in the default All mode) never
-    // filters anything. A Restricted Rep only ever sees what's in its own
-    // RepProductAccess grants - see Rep.ProductAccessMode.
+    // filters anything. A Restricted Rep sees what's in its own
+    // RepProductAccess grants, plus whatever it created itself (see
+    // Product.CreatedByRepId) - same "granted subset + own creations" shape
+    // as CustomerService's Restricted mode.
     private async Task<IQueryable<Product>> ApplyRepScopeAsync(IQueryable<Product> query, Guid? scopeToRepId)
     {
         if (scopeToRepId is null) return query;
@@ -199,7 +222,7 @@ public class ProductService(AppDbContext dbContext) : IProductService
         var allowedIds = dbContext.RepProductAccesses
             .Where(a => a.RepId == scopeToRepId)
             .Select(a => a.ProductId);
-        return query.Where(p => allowedIds.Contains(p.Id));
+        return query.Where(p => p.CreatedByRepId == scopeToRepId || allowedIds.Contains(p.Id));
     }
 
     private async Task<bool> IsVisibleToRepAsync(Guid productId, Guid? scopeToRepId)
@@ -209,8 +232,16 @@ public class ProductService(AppDbContext dbContext) : IProductService
         var rep = await dbContext.Reps.FirstOrDefaultAsync(r => r.Id == scopeToRepId);
         if (rep is null || rep.ProductAccessMode == AccessMode.All) return true;
 
-        return await dbContext.RepProductAccesses.AnyAsync(a => a.RepId == scopeToRepId && a.ProductId == productId);
+        return await dbContext.Products.AnyAsync(p => p.Id == productId && p.CreatedByRepId == scopeToRepId)
+            || await dbContext.RepProductAccesses.AnyAsync(a => a.RepId == scopeToRepId && a.ProductId == productId);
     }
+
+    // Edit/delete needs the stricter "did this Rep create it" check, not
+    // the broader read-visibility one above - a Restricted Rep may be able
+    // to see a product via a RepProductAccess grant without having created
+    // it, and must never be able to touch someone else's catalog entry.
+    private static bool IsOwnRepCreation(Product product, Guid? scopeToRepId) =>
+        scopeToRepId is null || product.CreatedByRepId == scopeToRepId;
 
     private async Task<Product?> FindOwnedProduct(Guid userId, Guid id) =>
         await dbContext.Products.FirstOrDefaultAsync(p => p.Id == id && p.UserId == userId);
@@ -227,6 +258,7 @@ public class ProductService(AppDbContext dbContext) : IProductService
         StockQuantity = product.StockQuantity,
         IsActive = product.IsActive,
         CreatedAt = product.CreatedAt,
-        UpdatedAt = product.UpdatedAt
+        UpdatedAt = product.UpdatedAt,
+        CreatedByRepId = product.CreatedByRepId
     };
 }

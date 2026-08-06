@@ -16,6 +16,12 @@ public static class AccountStatusErrorCodes
     public const string TrialExpired = "TRIAL_EXPIRED";
     public const string AccountSuspended = "ACCOUNT_SUSPENDED";
 
+    // Distinct from the two above: those describe the owning business's own
+    // subscription state (still meaningful for a Rep working under it - see
+    // AccountStatusFilter). This one is Rep-specific - the owner logged this
+    // one sub-account out or deactivated it, nothing to do with billing.
+    public const string RepSessionEnded = "REP_SESSION_ENDED";
+
     public static string For(string accountStatus) =>
         accountStatus == "Suspended" ? AccountSuspended : TrialExpired;
 }

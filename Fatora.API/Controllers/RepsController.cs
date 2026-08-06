@@ -8,14 +8,21 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Fatora.API.Controllers;
 
+// Class-level "SalesRep,Rep" (broadest) with every owner-only action below
+// narrowing back down to "SalesRep" - multiple [Authorize] attributes AND
+// their role sets together rather than the method-level one overriding the
+// class-level one, so a narrow class-level restriction can never be
+// "widened" by a broader method-level attribute (that combination is
+// simply unsatisfiable). Same pattern ProductsController already uses.
 [Route("api/reps")]
 [ApiController]
-[Authorize(Roles = "SalesRep")]
+[Authorize(Roles = "SalesRep,Rep")]
 public class RepsController(
     IRepService repService,
     IRepAuthService repAuthService,
     CreateRepRequestValidator createRepValidator) : ControllerBase
 {
+    [Authorize(Roles = "SalesRep")]
     [HttpPost]
     public async Task<IActionResult> Create(CreateRepRequest request)
     {
@@ -29,6 +36,7 @@ public class RepsController(
         return StatusCode(StatusCodes.Status201Created, result);
     }
 
+    [Authorize(Roles = "SalesRep")]
     [HttpGet]
     public async Task<IActionResult> GetAll()
     {
@@ -36,6 +44,7 @@ public class RepsController(
         return Ok(result);
     }
 
+    [Authorize(Roles = "SalesRep")]
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById(Guid id)
     {
@@ -43,6 +52,18 @@ public class RepsController(
         return Ok(result);
     }
 
+    // The one endpoint on this controller a Rep session itself calls (about
+    // its own account) rather than the owner - e.g. to know its current
+    // ProductAccessMode before offering "create my own product".
+    [Authorize(Roles = "Rep")]
+    [HttpGet("me")]
+    public async Task<IActionResult> GetMyInfo()
+    {
+        var result = await repService.GetMyInfoAsync(User.GetRepIdOrNull()!.Value);
+        return Ok(result);
+    }
+
+    [Authorize(Roles = "SalesRep")]
     [HttpPost("{id:guid}/logout")]
     public async Task<IActionResult> Logout(Guid id)
     {
@@ -50,6 +71,7 @@ public class RepsController(
         return NoContent();
     }
 
+    [Authorize(Roles = "SalesRep")]
     [HttpPost("{id:guid}/deactivate")]
     public async Task<IActionResult> Deactivate(Guid id)
     {
@@ -57,6 +79,7 @@ public class RepsController(
         return NoContent();
     }
 
+    [Authorize(Roles = "SalesRep")]
     [HttpPost("{id:guid}/reactivate")]
     public async Task<IActionResult> Reactivate(Guid id)
     {
@@ -64,6 +87,7 @@ public class RepsController(
         return Ok(result);
     }
 
+    [Authorize(Roles = "SalesRep")]
     [HttpPost("{id:guid}/regenerate-qr")]
     public async Task<IActionResult> RegenerateQr(Guid id)
     {
@@ -71,6 +95,7 @@ public class RepsController(
         return Ok(result);
     }
 
+    [Authorize(Roles = "SalesRep")]
     [HttpGet("{id:guid}/product-access")]
     public async Task<IActionResult> GetProductAccess(Guid id)
     {
@@ -78,6 +103,7 @@ public class RepsController(
         return Ok(result);
     }
 
+    [Authorize(Roles = "SalesRep")]
     [HttpPut("{id:guid}/product-access")]
     public async Task<IActionResult> SetProductAccess(Guid id, UpdateRepProductAccessRequest request)
     {
@@ -85,6 +111,7 @@ public class RepsController(
         return Ok(result);
     }
 
+    [Authorize(Roles = "SalesRep")]
     [HttpGet("{id:guid}/customer-access")]
     public async Task<IActionResult> GetCustomerAccess(Guid id)
     {
@@ -92,6 +119,7 @@ public class RepsController(
         return Ok(result);
     }
 
+    [Authorize(Roles = "SalesRep")]
     [HttpPut("{id:guid}/customer-access")]
     public async Task<IActionResult> SetCustomerAccess(Guid id, UpdateRepCustomerAccessRequest request)
     {

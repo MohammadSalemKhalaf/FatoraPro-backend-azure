@@ -16,5 +16,13 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.HasIndex(x => new { x.UserId, x.Barcode })
             .IsUnique()
             .HasFilter("\"Barcode\" IS NOT NULL");
+
+        builder.HasIndex(x => x.CreatedByRepId);
+
+        // See OrderConfiguration.CreatedByRep for why this is Restrict.
+        builder.HasOne(x => x.CreatedByRep)
+            .WithMany()
+            .HasForeignKey(x => x.CreatedByRepId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

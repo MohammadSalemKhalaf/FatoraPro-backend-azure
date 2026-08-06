@@ -54,9 +54,23 @@ public class RepAuthService(IConfiguration configuration, AppDbContext dbContext
             return null;
         }
 
-        if (storedToken.ExpiresOnUtc < DateTime.UtcNow || !storedToken.Rep.IsActive)
+        if (storedToken.ExpiresOnUtc < DateTime.UtcNow)
         {
             throw new UnauthorizedException("Invalid or expired refresh token");
+        }
+
+        // Distinct from a plain expiry: this token is still technically
+        // live, but the owner deactivated the rep since it was issued - the
+        // dedicated code lets the frontend show "your session ended, re-scan
+        // your QR" instead of a silent, unexplained logout (see
+        // AccountStatusFilter for the equivalent mid-session check, which
+        // only fires while the *access* token is still valid - this branch
+        // is what catches the case where it had already expired by the
+        // time the device reconnects and tries to refresh).
+        if (!storedToken.Rep.IsActive)
+        {
+            throw new UnauthorizedException(
+                "This rep session has ended.", AccountStatusErrorCodes.RepSessionEnded);
         }
 
         var ownerStatus = UserService.ComputeAccountStatus(storedToken.Rep.OwnerUser);
@@ -91,6 +105,7 @@ public class RepAuthService(IConfiguration configuration, AppDbContext dbContext
             new(JwtRegisteredClaimNames.Sub, rep.Id.ToString()),
             new(ClaimTypes.Role, "Rep"),
             new("ownerId", rep.OwnerUserId.ToString()),
+            new("sessionVersion", rep.SessionVersion.ToString()),
         };
 
         var descriptor = new SecurityTokenDescriptor

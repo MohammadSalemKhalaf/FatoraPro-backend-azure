@@ -9,9 +9,12 @@ using System.Security.Cryptography;
 
 namespace Fatora.BL.Services.Classes;
 
-// Owner-facing CRUD for Reps - never called by a Rep session itself, only
-// by the SalesRep-tier owner (see RepsController's [Authorize(Roles =
-// "SalesRep")]). Session issuing/refresh/revocation lives in
+// Owner-facing CRUD for Reps - only by the SalesRep-tier owner (see
+// RepsController's [Authorize(Roles = "SalesRep")]), with one exception:
+// GetMyInfoAsync, which a Rep session calls about itself (to know its own
+// current ProductAccessMode - e.g. whether to offer "create my own
+// product"), needs no owner-ownership check since the caller already IS the
+// rep in question. Session issuing/refresh/revocation lives in
 // IRepAuthService instead, mirroring how LoginService/JwtTokenProviderService
 // are split for normal Users.
 public class RepService(AppDbContext dbContext, IRepAuthService repAuthService) : IRepService
@@ -52,9 +55,29 @@ public class RepService(AppDbContext dbContext, IRepAuthService repAuthService) 
         return ToResponse(rep, includeQrToken: true);
     }
 
+    public async Task<RepResponse> GetMyInfoAsync(Guid repId)
+    {
+        var rep = await dbContext.Reps.FirstOrDefaultAsync(r => r.Id == repId);
+        if (rep is null)
+        {
+            throw new NotFoundException(nameof(Rep), repId);
+        }
+
+        return ToResponse(rep, includeQrToken: false);
+    }
+
     public async Task LogoutAsync(Guid ownerUserId, Guid repId)
     {
         var rep = await FindOwnedRep(ownerUserId, repId);
+
+        // SessionVersion++ is what actually force-ends an already-issued
+        // access token mid-session (see AccountStatusFilter) - revoking the
+        // refresh token alone only blocks the *next* renewal, and that
+        // device's current token would otherwise keep working until it
+        // naturally expires.
+        rep.SessionVersion++;
+        await dbContext.SaveChangesAsync();
+
         await repAuthService.RevokeSessionAsync(rep.Id);
     }
 
@@ -63,12 +86,20 @@ public class RepService(AppDbContext dbContext, IRepAuthService repAuthService) 
         var rep = await FindOwnedRep(ownerUserId, repId);
 
         rep.IsActive = false;
+        rep.SessionVersion++;
         await dbContext.SaveChangesAsync();
 
-        // Blocks any future login-by-qr immediately - a lingering active
-        // session still gets force-ended here too, rather than left to
-        // expire naturally over its remaining refresh-token lifetime.
-        await repAuthService.RevokeSessionAsync(rep.Id);
+        // Deliberately does NOT also call RevokeSessionAsync here (unlike
+        // LogoutAsync) - IsActive=false already blocks both a future
+        // login-by-qr and, on its own, a refresh attempt (see
+        // RepAuthService.TryRefreshAsync's !storedToken.Rep.IsActive check).
+        // Deleting the refresh-token row on top of that would only destroy
+        // the one thing that check needs to still find: without the row,
+        // TryRefreshAsync can't tell "this rep was deactivated" apart from
+        // "this token never existed", and the device refreshing gets a
+        // generic, code-less rejection instead of the dedicated
+        // REP_SESSION_ENDED one - silently kicked out with no explanation,
+        // exactly the popup this whole mechanism exists to prevent.
     }
 
     public async Task<RepResponse> ReactivateAsync(Guid ownerUserId, Guid repId)

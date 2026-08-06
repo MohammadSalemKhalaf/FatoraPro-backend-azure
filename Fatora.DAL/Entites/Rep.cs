@@ -8,15 +8,19 @@ public enum AccessMode
     Restricted
 }
 
-// Distinct from AccessMode (Product) because Products are never rep-owned
-// to begin with - a Rep only ever picks from the shared catalog, so "All"
-// vs "Restricted" is the only real distinction there. Customers ARE
-// rep-owned (CreatedByRepId), so a third state is meaningful: Own is every
-// Rep's actual behavior before this mode existed at all (each sub-account's
-// customer book starts empty and stays its own), All opens up the owner's
-// entire shared customer book, Restricted hands a Rep an admin-picked
-// subset of it (via RepCustomerAccess) while still always letting it see
-// whatever it personally created itself.
+// Distinct from AccessMode (Product) because a Product's "All" is
+// genuinely just the whole shared catalog with no per-Rep default to speak
+// of - a Restricted Rep additionally sees whatever it created itself (see
+// Product.CreatedByRepId), same idea as Customer below, but there's no
+// third "Own" default state the way Customer has, since every Rep started
+// out with All-mode catalog access, never an empty one of their own.
+// Customers ARE rep-owned (CreatedByRepId) with a real historical default,
+// so a third state is meaningful there: Own is every Rep's actual behavior
+// before this mode existed at all (each sub-account's customer book starts
+// empty and stays its own), All opens up the owner's entire shared customer
+// book, Restricted hands a Rep an admin-picked subset of it (via
+// RepCustomerAccess) while still always letting it see whatever it
+// personally created itself.
 public enum CustomerAccessMode
 {
     Own,
@@ -48,6 +52,16 @@ public class Rep
     public required string QrToken { get; set; }
 
     public bool IsActive { get; set; } = true;
+
+    // Bumped by RepService.LogoutAsync/DeactivateAsync, embedded as a claim
+    // at token-issue time (see RepAuthService.GenerateTokenAsync) - lets
+    // AccountStatusFilter reject an already-issued access token the instant
+    // it's stale, the same way IsActive already does for a deactivated rep.
+    // Needed because a JWT is otherwise stateless: revoking the refresh
+    // token (what "logout" alone used to do) only stops a *future* refresh,
+    // never invalidates a still-live access token already in the app's
+    // hands.
+    public int SessionVersion { get; set; }
 
     public AccessMode ProductAccessMode { get; set; } = AccessMode.All;
     public CustomerAccessMode CustomerAccessMode { get; set; } = CustomerAccessMode.Own;

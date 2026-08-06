@@ -13,4 +13,10 @@ public class ProductResponse
     public bool IsActive { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+
+    // Null for anything the owner (or an All-mode Rep) created - only set
+    // for a product a Restricted-mode Rep created itself. The frontend uses
+    // this to decide whether to offer edit/delete on a given tile for the
+    // currently logged-in Rep.
+    public Guid? CreatedByRepId { get; set; }
 }

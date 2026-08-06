@@ -9,10 +9,12 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Fatora.API.Controllers;
 
-// Class-level "SalesRep,Rep" covers the read actions (a Rep only ever
-// picks from the business's existing catalog) - every mutating action
-// below overrides back down to "SalesRep" only, since Reps never create,
-// edit, or delete products.
+// Class-level "SalesRep,Rep" covers every read action (a Rep only ever
+// picks from the business's existing catalog for read purposes) plus
+// Create/Update/Delete below, which are additionally scoped to "a Rep can
+// only touch a product it created itself" inside ProductService - see
+// ProductService.CreateAsync/IsOwnRepCreation. UploadImage/DeleteImage stay
+// owner-only for now (not part of the requested rep-owned-products scope).
 [Route("api/[controller]")]
 [ApiController]
 [Authorize(Roles = "SalesRep,Rep")]
@@ -22,7 +24,6 @@ public class ProductsController(
     CreateProductRequestValidator createValidator,
     UpdateProductRequestValidator updateValidator) : ControllerBase
 {
-    [Authorize(Roles = "SalesRep")]
     [HttpPost]
     public async Task<IActionResult> Create(CreateProductRequest request)
     {
@@ -32,7 +33,7 @@ public class ProductsController(
             return BadRequest(validationResult.Errors);
         }
 
-        var result = await productService.CreateAsync(User.GetEffectiveOwnerId(), request);
+        var result = await productService.CreateAsync(User.GetEffectiveOwnerId(), request, User.GetRepIdOrNull());
         return StatusCode(StatusCodes.Status201Created, result);
     }
 
@@ -66,7 +67,6 @@ public class ProductsController(
         return Ok(result);
     }
 
-    [Authorize(Roles = "SalesRep")]
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, UpdateProductRequest request)
     {
@@ -76,7 +76,7 @@ public class ProductsController(
             return BadRequest(validationResult.Errors);
         }
 
-        var result = await productService.UpdateAsync(User.GetEffectiveOwnerId(), id, request);
+        var result = await productService.UpdateAsync(User.GetEffectiveOwnerId(), id, request, User.GetRepIdOrNull());
         return Ok(result);
     }
 
@@ -104,19 +104,23 @@ public class ProductsController(
         return Ok(result);
     }
 
-    [Authorize(Roles = "SalesRep")]
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id)
     {
-        await productService.DeleteAsync(User.GetEffectiveOwnerId(), id);
+        await productService.DeleteAsync(User.GetEffectiveOwnerId(), id, User.GetRepIdOrNull());
         return NoContent();
     }
 
-    [Authorize(Roles = "SalesRep")]
+    // Read-only, same as GetAll (class-level "SalesRep,Rep") - without this,
+    // ProductsRepository.sync()'s combined GET /products + GET /products/
+    // archived would 403 on the second call for every Rep session, and
+    // since both awaited calls fail together, the products list on that
+    // device would never get past whatever was locally cached before -
+    // the exact bug behind a Restricted rep still seeing the full catalog.
     [HttpGet("archived")]
     public async Task<IActionResult> GetArchived()
     {
-        var result = await productService.GetArchivedAsync(User.GetEffectiveOwnerId());
+        var result = await productService.GetArchivedAsync(User.GetEffectiveOwnerId(), User.GetRepIdOrNull());
         return Ok(result);
     }
 
