@@ -10,9 +10,14 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Fatora.API.Controllers;
 
+// A Rep still needs to read the owner's business profile (company name,
+// logo, bank details) - it's what its own invoices are branded with - so
+// GetProfile alone is opened to "SalesRep,Rep" and resolves via
+// GetEffectiveOwnerId(). Every mutating action stays owner-only: a Rep
+// never edits the business's own profile.
 [Route("api/[controller]")]
 [ApiController]
-[Authorize(Roles = "SalesRep")]
+[Authorize(Roles = "SalesRep,Rep")]
 public class ProfileController(
     IUserService userService,
     IFileStorageService fileStorageService,
@@ -22,10 +27,11 @@ public class ProfileController(
     [HttpGet]
     public async Task<IActionResult> GetProfile()
     {
-        var result = await userService.GetProfileAsync(User.GetUserId());
+        var result = await userService.GetProfileAsync(User.GetEffectiveOwnerId());
         return Ok(result);
     }
 
+    [Authorize(Roles = "SalesRep")]
     [HttpPut]
     public async Task<IActionResult> UpdateProfile(UpdateProfileRequest request)
     {
@@ -39,6 +45,7 @@ public class ProfileController(
         return Ok(result);
     }
 
+    [Authorize(Roles = "SalesRep")]
     [HttpPost("logo")]
     public async Task<IActionResult> UploadLogo(IFormFile file)
     {
@@ -49,6 +56,7 @@ public class ProfileController(
         return Ok(result);
     }
 
+    [Authorize(Roles = "SalesRep")]
     [HttpDelete("logo")]
     public async Task<IActionResult> DeleteLogo()
     {
@@ -62,6 +70,7 @@ public class ProfileController(
         return Ok(result);
     }
 
+    [Authorize(Roles = "SalesRep")]
     [HttpPut("bank-details")]
     public async Task<IActionResult> UpdateBankDetails(UpdateBankDetailsRequest request)
     {
@@ -69,6 +78,7 @@ public class ProfileController(
         return Ok(result);
     }
 
+    [Authorize(Roles = "SalesRep")]
     [HttpDelete]
     public async Task<IActionResult> DeleteAccount(DeleteAccountRequest request)
     {

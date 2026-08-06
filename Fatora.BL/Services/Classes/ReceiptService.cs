@@ -14,10 +14,11 @@ namespace Fatora.BL.Services.Classes;
 // OrdersRepository already use, separate from SyncManager's delta pull.
 public class ReceiptService(AppDbContext dbContext) : IReceiptService
 {
-    public async Task<List<ReceiptResponse>> GetAllAsync(Guid userId)
+    public async Task<List<ReceiptResponse>> GetAllAsync(Guid userId, Guid? scopeToRepId = null)
     {
         var receipts = await dbContext.Receipts
-            .Where(r => r.UserId == userId && r.IsActive)
+            .Where(r => r.UserId == userId && r.IsActive
+                && (scopeToRepId == null || r.CreatedByRepId == scopeToRepId))
             .OrderByDescending(r => r.CreatedAt)
             .ToListAsync();
 

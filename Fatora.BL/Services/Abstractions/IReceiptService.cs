@@ -4,5 +4,5 @@ using Fatora.BL.DTOs.Responses;
 
 public interface IReceiptService
 {
-    Task<List<ReceiptResponse>> GetAllAsync(Guid userId);
+    Task<List<ReceiptResponse>> GetAllAsync(Guid userId, Guid? scopeToRepId = null);
 }
