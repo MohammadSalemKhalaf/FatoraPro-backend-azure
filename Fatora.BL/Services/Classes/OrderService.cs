@@ -453,13 +453,15 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         return customer;
     }
 
-    // scopeToRepId, when it names a Restricted rep, additionally requires
-    // every product to be in that rep's own RepProductAccess grants - a
-    // missing grant makes this indistinguishable from the product simply
-    // not existing (same null return, same NotFoundException at the call
-    // site), which is the actual backend enforcement: a restricted rep
-    // cannot invoice a product it can't see, even by calling this directly
-    // with a known id.
+    // scopeToRepId additionally requires every product to actually be
+    // visible to that rep under its current ProductAccessMode - a missing
+    // grant (Selected) or a product it didn't create (RepOwnedOnly) makes
+    // this indistinguishable from the product simply not existing (same
+    // null return, same NotFoundException at the call site), which is the
+    // actual backend enforcement: a rep cannot invoice a product it can't
+    // see, even by calling this directly with a known id. Mirrors
+    // ProductService.ApplyRepScopeAsync exactly - keep both in sync if this
+    // ever changes.
     private async Task<Dictionary<Guid, Product>?> LoadOwnedActiveProducts(
         Guid userId, List<OrderItemRequest> items, Guid? scopeToRepId)
     {
@@ -470,7 +472,11 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         if (scopeToRepId is { } repId)
         {
             var rep = await dbContext.Reps.FirstOrDefaultAsync(r => r.Id == repId);
-            if (rep is { ProductAccessMode: AccessMode.Restricted })
+            if (rep is { ProductAccessMode: ProductAccessMode.RepOwnedOnly })
+            {
+                query = query.Where(p => p.CreatedByRepId == repId);
+            }
+            else if (rep is { ProductAccessMode: ProductAccessMode.Selected })
             {
                 var allowedIds = dbContext.RepProductAccesses.Where(a => a.RepId == repId).Select(a => a.ProductId);
                 query = query.Where(p => allowedIds.Contains(p.Id));

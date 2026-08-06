@@ -2,23 +2,32 @@ using Fatora.DAL.Entities;
 
 namespace Fatora.DAL.Entites;
 
-public enum AccessMode
+// Three deliberately exclusive modes - a Rep is always in exactly one, never
+// a blend:
+// - RepOwnedOnly: starts with an empty catalog; the Rep creates its own
+//   products (see Product.CreatedByRepId) and sees only those. The owner
+//   can later grant a RepOwnedOnly-created product to some other Rep via
+//   the normal RepProductAccess assignment flow (SetProductAccessAsync) -
+//   nothing special needed for that, since the product is a completely
+//   ordinary company-owned row already.
+// - Selected: sees only an owner-curated subset via RepProductAccess.
+//   Can never create a product of its own.
+// - All: sees (and, unlike before, can also create into) the owner's whole
+//   shared catalog - a product it creates is exactly as "company-owned" as
+//   one any other Rep in All mode already sees.
+public enum ProductAccessMode
 {
-    All,
-    Restricted
+    RepOwnedOnly,
+    Selected,
+    All
 }
 
-// Distinct from AccessMode (Product) because a Product's "All" is
-// genuinely just the whole shared catalog with no per-Rep default to speak
-// of - a Restricted Rep additionally sees whatever it created itself (see
-// Product.CreatedByRepId), same idea as Customer below, but there's no
-// third "Own" default state the way Customer has, since every Rep started
-// out with All-mode catalog access, never an empty one of their own.
-// Customers ARE rep-owned (CreatedByRepId) with a real historical default,
-// so a third state is meaningful there: Own is every Rep's actual behavior
-// before this mode existed at all (each sub-account's customer book starts
-// empty and stays its own), All opens up the owner's entire shared customer
-// book, Restricted hands a Rep an admin-picked subset of it (via
+// Distinct from ProductAccessMode because Customers ARE rep-owned
+// (CreatedByRepId) with a real historical default, so a third state is
+// meaningful there: Own is every Rep's actual behavior before this mode
+// existed at all (each sub-account's customer book starts empty and stays
+// its own), All opens up the owner's entire shared customer book,
+// Restricted hands a Rep an admin-picked subset of it (via
 // RepCustomerAccess) while still always letting it see whatever it
 // personally created itself.
 public enum CustomerAccessMode
@@ -63,7 +72,7 @@ public class Rep
     // hands.
     public int SessionVersion { get; set; }
 
-    public AccessMode ProductAccessMode { get; set; } = AccessMode.All;
+    public ProductAccessMode ProductAccessMode { get; set; } = ProductAccessMode.All;
     public CustomerAccessMode CustomerAccessMode { get; set; } = CustomerAccessMode.Own;
 
     public DateTime CreatedAt { get; set; }

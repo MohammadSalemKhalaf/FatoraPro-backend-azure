@@ -133,12 +133,17 @@ public class RepService(AppDbContext dbContext, IRepAuthService repAuthService) 
     {
         var rep = await FindOwnedRep(ownerUserId, repId);
 
+        // RepProductAccess rows only ever mean something for Selected mode -
+        // RepOwnedOnly's visibility is entirely CreatedByRepId-driven and All
+        // sees everything regardless, so switching into (or staying in)
+        // either of those always clears any stale grants rather than leaving
+        // orphaned rows an admin picker would never show again.
         var existing = await dbContext.RepProductAccesses.Where(a => a.RepId == repId).ToListAsync();
         dbContext.RepProductAccesses.RemoveRange(existing);
 
         rep.ProductAccessMode = request.Mode;
 
-        if (request.Mode == AccessMode.Restricted)
+        if (request.Mode == ProductAccessMode.Selected)
         {
             // Silently drops any id that isn't actually one of this owner's
             // own products - the caller is always the owner themselves, so

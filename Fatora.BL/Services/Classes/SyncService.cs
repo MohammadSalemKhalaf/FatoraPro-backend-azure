@@ -529,7 +529,11 @@ public class SyncService(AppDbContext dbContext) : ISyncService
         if (scopeToRepId is { } repId)
         {
             var rep = await dbContext.Reps.FirstOrDefaultAsync(r => r.Id == repId);
-            if (rep is { ProductAccessMode: AccessMode.Restricted })
+            if (rep is { ProductAccessMode: ProductAccessMode.RepOwnedOnly })
+            {
+                query = query.Where(p => p.CreatedByRepId == repId);
+            }
+            else if (rep is { ProductAccessMode: ProductAccessMode.Selected })
             {
                 var allowedIds = dbContext.RepProductAccesses.Where(a => a.RepId == repId).Select(a => a.ProductId);
                 query = query.Where(p => allowedIds.Contains(p.Id));

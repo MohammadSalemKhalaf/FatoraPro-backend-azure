@@ -4,6 +4,6 @@ using System.ComponentModel.DataAnnotations;
 using Fatora.DAL.Entites;
 
 public sealed record UpdateRepProductAccessRequest(
-    [Required] AccessMode Mode,
+    [Required] ProductAccessMode Mode,
     List<Guid> ProductIds
 );
