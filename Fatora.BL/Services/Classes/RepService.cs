@@ -42,6 +42,16 @@ public class RepService(AppDbContext dbContext, IRepAuthService repAuthService) 
         return reps.Select(r => ToResponse(r, includeQrToken: false)).ToList();
     }
 
+    // Unlike GetAllAsync, this includes the raw QrToken - a plain list never
+    // does (see ToResponse), but the owner deliberately opening one rep's
+    // own detail screen (to re-share its QR after a lost device, say) is
+    // exactly the on-demand case that token exposure should be limited to.
+    public async Task<RepResponse> GetByIdAsync(Guid ownerUserId, Guid repId)
+    {
+        var rep = await FindOwnedRep(ownerUserId, repId);
+        return ToResponse(rep, includeQrToken: true);
+    }
+
     public async Task LogoutAsync(Guid ownerUserId, Guid repId)
     {
         var rep = await FindOwnedRep(ownerUserId, repId);

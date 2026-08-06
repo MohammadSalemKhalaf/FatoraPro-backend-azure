@@ -36,6 +36,13 @@ public class RepsController(
         return Ok(result);
     }
 
+    [HttpGet("{id:guid}")]
+    public async Task<IActionResult> GetById(Guid id)
+    {
+        var result = await repService.GetByIdAsync(User.GetUserId(), id);
+        return Ok(result);
+    }
+
     [HttpPost("{id:guid}/logout")]
     public async Task<IActionResult> Logout(Guid id)
     {

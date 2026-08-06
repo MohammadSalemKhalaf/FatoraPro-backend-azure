@@ -7,6 +7,7 @@ public interface IRepService
 {
     Task<RepResponse> CreateAsync(Guid ownerUserId, CreateRepRequest request);
     Task<List<RepResponse>> GetAllAsync(Guid ownerUserId);
+    Task<RepResponse> GetByIdAsync(Guid ownerUserId, Guid repId);
     Task LogoutAsync(Guid ownerUserId, Guid repId);
     Task DeactivateAsync(Guid ownerUserId, Guid repId);
     Task<RepResponse> RegenerateQrAsync(Guid ownerUserId, Guid repId);
