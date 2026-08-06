@@ -113,7 +113,8 @@ public class RepAuthService(IConfiguration configuration, AppDbContext dbContext
         {
             AccessToken = tokenHandler.WriteToken(securityToken),
             RefreshToken = rawRefreshToken,
-            Expires = expiry
+            Expires = expiry,
+            Name = rep.Name
         };
     }
 
