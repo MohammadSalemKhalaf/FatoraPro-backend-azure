@@ -79,11 +79,24 @@ public class OrdersController(
         return Ok(result);
     }
 
+    // Owner-only: a Rep session can never hard-delete an invoice, full stop
+    // - it only ever has "مرتجع" (Return) below. Enforced here, not just
+    // hidden in the UI.
+    [Authorize(Roles = "SalesRep")]
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id)
     {
         await orderService.DeleteAsync(User.GetEffectiveOwnerId(), id, User.GetRepIdOrNull());
         return NoContent();
+    }
+
+    // Both the owner and a Rep can mark an invoice as returned - unlike
+    // Delete, this keeps the invoice (and its audit trail) fully visible.
+    [HttpPost("{id:guid}/return")]
+    public async Task<IActionResult> Return(Guid id)
+    {
+        var result = await orderService.ReturnAsync(User.GetEffectiveOwnerId(), id, User.GetRepIdOrNull());
+        return Ok(result);
     }
 
     [HttpPost("{id:guid}/record-payment")]

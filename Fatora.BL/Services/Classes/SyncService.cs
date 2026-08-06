@@ -223,6 +223,7 @@ public class SyncService(AppDbContext dbContext) : ISyncService
                     Notes = item.Notes,
                     PaidAmount = item.PaidAmount,
                     CoveredByReceipt = item.CoveredByReceipt,
+                    IsReturned = item.IsReturned,
                     CreatedAt = item.UpdatedAt,
                     UpdatedAt = item.UpdatedAt,
                     OrderItems = item.Items.Select(i => new OrderItem
@@ -250,6 +251,33 @@ public class SyncService(AppDbContext dbContext) : ISyncService
             if (item.UpdatedAt <= existing.UpdatedAt)
             {
                 return new SyncItemResult(item.Id, "Conflict", "Server has a newer or equal version; pull to reconcile.");
+            }
+
+            // A push that only just marked this returned (see
+            // OrdersRepository.returnOrder - nothing else about the order
+            // changes) is handled entirely separately from a normal edit
+            // below: no customer/item/discount reconciliation, just the
+            // one-time stock restoration and the flag itself. Doing this
+            // through the generic edit path instead would restore stock via
+            // the "old items" loop below and then immediately re-decrement
+            // it via the "new items" loop, since the items themselves never
+            // actually changed - netting out to zero and silently failing
+            // to actually restore anything.
+            if (item.IsReturned && !existing.IsReturned)
+            {
+                foreach (var lineItem in existing.OrderItems)
+                {
+                    AdjustStock(lineItem.Product, lineItem.Quantity);
+                }
+                existing.IsReturned = true;
+                existing.UpdatedAt = item.UpdatedAt;
+                await dbContext.SaveChangesAsync();
+                return new SyncItemResult(item.Id, "Applied");
+            }
+
+            if (existing.IsReturned)
+            {
+                return new SyncItemResult(item.Id, "Rejected", "Cannot edit an invoice that has been marked as returned.");
             }
 
             // Mirrors OrderService.UpdateAsync's same rule - the client is expected to block this
@@ -404,17 +432,34 @@ public class SyncService(AppDbContext dbContext) : ISyncService
     {
         try
         {
+            // A Rep can never hard-delete via sync push either - same
+            // owner-only restriction as the REST DELETE endpoint (see
+            // OrdersController.Delete), enforced here so it can't be routed
+            // around through the offline sync path instead. scopeToRepId is
+            // only ever non-null for an actual Rep session (SyncController
+            // never merges in an owner-supplied ?repId= for pushes).
+            if (scopeToRepId is not null)
+            {
+                return new SyncItemResult(orderId, "Rejected", "Only the account owner can delete an invoice.");
+            }
+
             var order = await dbContext.Orders.FirstOrDefaultAsync(o =>
                 o.Id == orderId && o.UserId == userId
                 && (scopeToRepId == null || o.CreatedByRepId == scopeToRepId));
 
             if (order is not null)
             {
-                // OrderItems (and their Product) are auto-included - see
-                // OrderConfiguration/ItemConfiguration.
-                foreach (var lineItem in order.OrderItems)
+                // Skip if already returned - PushOrderAsync's return
+                // handling already restored this stock once; doing it
+                // again here would double-count it.
+                if (!order.IsReturned)
                 {
-                    AdjustStock(lineItem.Product, lineItem.Quantity);
+                    // OrderItems (and their Product) are auto-included - see
+                    // OrderConfiguration/ItemConfiguration.
+                    foreach (var lineItem in order.OrderItems)
+                    {
+                        AdjustStock(lineItem.Product, lineItem.Quantity);
+                    }
                 }
                 dbContext.Orders.Remove(order);
                 await dbContext.SaveChangesAsync();

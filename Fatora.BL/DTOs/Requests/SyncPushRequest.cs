@@ -44,7 +44,8 @@ public sealed record OrderSyncItem(
     DateTime UpdatedAt,
     [Required, MinLength(1)] List<OrderItemSyncItem> Items,
     [Range(0, double.MaxValue)] decimal CashDiscount = 0m,
-    bool CoveredByReceipt = false
+    bool CoveredByReceipt = false,
+    bool IsReturned = false
 );
 
 public sealed record OrderItemSyncItem(

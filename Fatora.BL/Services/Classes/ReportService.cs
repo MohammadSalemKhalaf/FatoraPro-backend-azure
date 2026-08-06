@@ -26,10 +26,13 @@ public class ReportService(AppDbContext dbContext) : IReportService
     {
         var cutoff = GetCutoff(period);
 
+        // A returned invoice's items weren't ultimately sold - excluded here
+        // the same way LoadOrdersForPeriod excludes the invoice itself from
+        // sales/top-clients.
         var query = dbContext.OrderItems
             .Include(oi => oi.Order)
             .Include(oi => oi.Product)
-            .Where(oi => oi.Order.UserId == userId);
+            .Where(oi => oi.Order.UserId == userId && !oi.Order.IsReturned);
 
         if (cutoff is not null)
         {
@@ -90,12 +93,17 @@ public class ReportService(AppDbContext dbContext) : IReportService
     // "only this Rep's own orders," same exclusive-ownership rule
     // OrdersController.GetAll already applies (an order belongs to whoever
     // raised it, independent of that Rep's customer/product access mode).
+    // A returned invoice is excluded entirely - its sale was reversed, so
+    // it contributes nothing to sales totals or "top clients by value"
+    // (the already-restored stock and cleared debt are handled elsewhere,
+    // see Order.RemainingBalance/OrderService.ReturnAsync).
     private async Task<List<Order>> LoadOrdersForPeriod(Guid userId, SummaryPeriod period, Guid? scopeToRepId = null)
     {
         var cutoff = GetCutoff(period);
 
         var query = dbContext.Orders.Include(o => o.Customer)
-            .Where(o => o.UserId == userId && (scopeToRepId == null || o.CreatedByRepId == scopeToRepId));
+            .Where(o => o.UserId == userId && !o.IsReturned
+                && (scopeToRepId == null || o.CreatedByRepId == scopeToRepId));
 
         if (cutoff is not null)
         {

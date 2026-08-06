@@ -23,5 +23,6 @@ public class OrderResponse
     public decimal RemainingBalance { get; set; }
     public bool CoveredByReceipt { get; set; }
     public bool IsEdited { get; set; }
+    public bool IsReturned { get; set; }
     public List<OrderItemResponse> Items { get; set; } = new();
 }

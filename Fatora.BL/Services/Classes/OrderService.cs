@@ -113,6 +113,11 @@ public class OrderService(AppDbContext dbContext) : IOrderService
             throw new NotFoundException(nameof(Order), id);
         }
 
+        if (order.IsReturned)
+        {
+            throw new BadRequestException("Cannot edit an invoice that has been marked as returned.");
+        }
+
         if (ComputeStatus(order, DateOnly.FromDateTime(DateTime.UtcNow)) == "Paid")
         {
             throw new BadRequestException("Cannot edit an invoice that has already been paid in full.");
@@ -208,15 +213,50 @@ public class OrderService(AppDbContext dbContext) : IOrderService
             throw new NotFoundException(nameof(Order), id);
         }
 
-        // OrderItems (and their Product) are auto-included - see
-        // OrderConfiguration/ItemConfiguration.
-        foreach (var lineItem in order.OrderItems)
+        // Skip if already returned - ReturnAsync already restored this
+        // stock once; doing it again here would double-count it.
+        if (!order.IsReturned)
         {
-            AdjustStock(lineItem.Product, lineItem.Quantity);
+            // OrderItems (and their Product) are auto-included - see
+            // OrderConfiguration/ItemConfiguration.
+            foreach (var lineItem in order.OrderItems)
+            {
+                AdjustStock(lineItem.Product, lineItem.Quantity);
+            }
         }
 
         dbContext.Orders.Remove(order);
         await dbContext.SaveChangesAsync();
+    }
+
+    // Marks an invoice as returned instead of deleting it - permanent (no
+    // "un-return"), restores every line's stock quantity exactly once, and
+    // from that point on RemainingBalance/ComputeStatus/report sales sums
+    // all treat it as returned automatically. PaidAmount is deliberately
+    // never touched here - see Order.RemainingBalance for why.
+    public async Task<OrderResponse> ReturnAsync(Guid userId, Guid id, Guid? scopeToRepId = null)
+    {
+        var order = await FindOwnedOrder(userId, id, scopeToRepId);
+
+        if (order is null)
+        {
+            throw new NotFoundException(nameof(Order), id);
+        }
+
+        if (order.IsReturned)
+        {
+            throw new ConflictException("This invoice has already been marked as returned.");
+        }
+
+        foreach (var item in order.OrderItems)
+        {
+            AdjustStock(item.Product, item.Quantity);
+        }
+
+        order.IsReturned = true;
+        await dbContext.SaveChangesAsync();
+
+        return ToResponse(order);
     }
 
     public async Task<OrderResponse> RecordPaymentAsync(Guid userId, Guid id, RecordPaymentRequest request, Guid? scopeToRepId = null)
@@ -226,6 +266,11 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         if (order is null)
         {
             throw new NotFoundException(nameof(Order), id);
+        }
+
+        if (order.IsReturned)
+        {
+            throw new BadRequestException("Cannot record a payment on a returned invoice.");
         }
 
         if (request.Amount > order.RemainingBalance + AmountTolerance)
@@ -357,6 +402,11 @@ public class OrderService(AppDbContext dbContext) : IOrderService
 
     internal static string ComputeStatus(Order order, DateOnly today)
     {
+        if (order.IsReturned)
+        {
+            return "Returned";
+        }
+
         if (order.RemainingBalance <= AmountTolerance)
         {
             return "Paid";
@@ -478,6 +528,7 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         RemainingBalance = order.RemainingBalance,
         CoveredByReceipt = order.CoveredByReceipt,
         IsEdited = order.IsEdited,
+        IsReturned = order.IsReturned,
         Items = order.OrderItems.Select(oi => new OrderItemResponse
         {
             ProductId = oi.ProductId,

@@ -21,13 +21,26 @@ public class Order : ISyncableEntity
     public decimal Total =>
         Math.Round((Subtotal - DiscountAmount - CashDiscount) * 2, 0, MidpointRounding.AwayFromZero) / 2;
     public decimal PaidAmount { get; set; }
-    public decimal RemainingBalance => Total - PaidAmount;
+
+    // A returned invoice contributes nothing to what the customer still
+    // owes - PaidAmount itself is deliberately left untouched (real cash
+    // already collected stays an honest historical record; see
+    // OrderService.ReturnAsync), it's only the *remaining* balance that
+    // clears. This is a distinct concept from CoveredByReceipt below - an
+    // administrative write-off - not a reuse of it.
+    public decimal RemainingBalance => IsReturned ? 0 : Total - PaidAmount;
 
     // Set only by the customer-level "close outstanding invoices" action once
     // their debt is fully covered by general receipts - never by a real
     // payment. Purely additive display metadata: it never changes PaidAmount
     // or the computed Status (see OrderService.ComputeStatus).
     public bool CoveredByReceipt { get; set; }
+
+    // Set only by OrderService.ReturnAsync (goods physically returned) -
+    // restores each line's stock quantity once, permanently excludes this
+    // invoice's Total from sales reporting, and clears RemainingBalance
+    // above. Never set anywhere else; never unset.
+    public bool IsReturned { get; set; }
 
     // Set whenever a real edit (customer, discount, or line items) changes
     // what this invoice actually says, at which point InvoiceNumber is also
