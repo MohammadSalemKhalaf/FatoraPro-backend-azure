@@ -208,7 +208,7 @@ public class SyncService(AppDbContext dbContext) : ISyncService
                     return new SyncItemResult(item.Id, "Rejected", "Customer not found.");
                 }
 
-                var productsById = await LoadOwnedProducts(userId, item.Items);
+                var productsById = await LoadOwnedProducts(userId, item.Items, scopeToRepId);
 
                 if (productsById is null)
                 {
@@ -273,7 +273,7 @@ public class SyncService(AppDbContext dbContext) : ISyncService
                 return new SyncItemResult(item.Id, "Rejected", "Customer not found.");
             }
 
-            var newProductsById = await LoadOwnedProducts(userId, item.Items);
+            var newProductsById = await LoadOwnedProducts(userId, item.Items, scopeToRepId);
 
             if (newProductsById is null)
             {
@@ -436,13 +436,27 @@ public class SyncService(AppDbContext dbContext) : ISyncService
         }
     }
 
-    private async Task<Dictionary<Guid, Product>?> LoadOwnedProducts(Guid userId, List<OrderItemSyncItem> items)
+    // See OrderService.LoadOwnedActiveProducts - same rep-restriction
+    // enforcement, mirrored here so a restricted rep can't route around it
+    // through the sync push path instead of the plain REST one.
+    private async Task<Dictionary<Guid, Product>?> LoadOwnedProducts(
+        Guid userId, List<OrderItemSyncItem> items, Guid? scopeToRepId)
     {
         var productIds = items.Select(i => i.ProductId).Distinct().ToList();
 
-        var products = await dbContext.Products
-            .Where(p => productIds.Contains(p.Id) && p.UserId == userId)
-            .ToListAsync();
+        var query = dbContext.Products.Where(p => productIds.Contains(p.Id) && p.UserId == userId);
+
+        if (scopeToRepId is { } repId)
+        {
+            var rep = await dbContext.Reps.FirstOrDefaultAsync(r => r.Id == repId);
+            if (rep is { ProductAccessMode: AccessMode.Restricted })
+            {
+                var allowedIds = dbContext.RepProductAccesses.Where(a => a.RepId == repId).Select(a => a.ProductId);
+                query = query.Where(p => allowedIds.Contains(p.Id));
+            }
+        }
+
+        var products = await query.ToListAsync();
 
         return products.Count == productIds.Count ? products.ToDictionary(p => p.Id) : null;
     }

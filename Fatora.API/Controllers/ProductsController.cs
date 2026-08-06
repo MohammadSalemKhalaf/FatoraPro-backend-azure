@@ -44,18 +44,19 @@ public class ProductsController(
     {
         if (skip is null && take is null)
         {
-            var all = await productService.GetAllAsync(User.GetEffectiveOwnerId());
+            var all = await productService.GetAllAsync(User.GetEffectiveOwnerId(), User.GetRepIdOrNull());
             return Ok(all);
         }
 
-        var result = await productService.GetPagedAsync(User.GetEffectiveOwnerId(), skip ?? 0, Math.Clamp(take ?? 20, 1, 100));
+        var result = await productService.GetPagedAsync(
+            User.GetEffectiveOwnerId(), skip ?? 0, Math.Clamp(take ?? 20, 1, 100), User.GetRepIdOrNull());
         return Ok(result);
     }
 
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById(Guid id)
     {
-        var result = await productService.GetByIdAsync(User.GetEffectiveOwnerId(), id);
+        var result = await productService.GetByIdAsync(User.GetEffectiveOwnerId(), id, User.GetRepIdOrNull());
         return Ok(result);
     }
 

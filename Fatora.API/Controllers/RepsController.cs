@@ -57,6 +57,13 @@ public class RepsController(
         return Ok(result);
     }
 
+    [HttpPut("{id:guid}/product-access")]
+    public async Task<IActionResult> SetProductAccess(Guid id, UpdateRepProductAccessRequest request)
+    {
+        var result = await repService.SetProductAccessAsync(User.GetUserId(), id, request);
+        return Ok(result);
+    }
+
     // A rep has no username/password to authenticate with at this point -
     // this is the one action on this controller anyone can call before
     // being signed in at all.

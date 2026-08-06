@@ -27,7 +27,7 @@ public class OrderService(AppDbContext dbContext) : IOrderService
             throw new NotFoundException(nameof(Customer), request.CustomerId);
         }
 
-        var productsById = await LoadOwnedActiveProducts(userId, request.Items);
+        var productsById = await LoadOwnedActiveProducts(userId, request.Items, createdByRepId);
 
         if (productsById is null)
         {
@@ -125,7 +125,7 @@ public class OrderService(AppDbContext dbContext) : IOrderService
             throw new NotFoundException(nameof(Customer), request.CustomerId);
         }
 
-        var productsById = await LoadOwnedActiveProducts(userId, request.Items);
+        var productsById = await LoadOwnedActiveProducts(userId, request.Items, scopeToRepId);
 
         if (productsById is null)
         {
@@ -386,13 +386,31 @@ public class OrderService(AppDbContext dbContext) : IOrderService
             c.Id == customerId && c.UserId == userId && c.IsActive
             && (scopeToRepId == null || c.CreatedByRepId == scopeToRepId));
 
-    private async Task<Dictionary<Guid, Product>?> LoadOwnedActiveProducts(Guid userId, List<OrderItemRequest> items)
+    // scopeToRepId, when it names a Restricted rep, additionally requires
+    // every product to be in that rep's own RepProductAccess grants - a
+    // missing grant makes this indistinguishable from the product simply
+    // not existing (same null return, same NotFoundException at the call
+    // site), which is the actual backend enforcement: a restricted rep
+    // cannot invoice a product it can't see, even by calling this directly
+    // with a known id.
+    private async Task<Dictionary<Guid, Product>?> LoadOwnedActiveProducts(
+        Guid userId, List<OrderItemRequest> items, Guid? scopeToRepId)
     {
         var productIds = items.Select(i => i.ProductId).Distinct().ToList();
 
-        var products = await dbContext.Products
-            .Where(p => productIds.Contains(p.Id) && p.UserId == userId && p.IsActive)
-            .ToListAsync();
+        var query = dbContext.Products.Where(p => productIds.Contains(p.Id) && p.UserId == userId && p.IsActive);
+
+        if (scopeToRepId is { } repId)
+        {
+            var rep = await dbContext.Reps.FirstOrDefaultAsync(r => r.Id == repId);
+            if (rep is { ProductAccessMode: AccessMode.Restricted })
+            {
+                var allowedIds = dbContext.RepProductAccesses.Where(a => a.RepId == repId).Select(a => a.ProductId);
+                query = query.Where(p => allowedIds.Contains(p.Id));
+            }
+        }
+
+        var products = await query.ToListAsync();
 
         return products.Count == productIds.Count ? products.ToDictionary(p => p.Id) : null;
     }

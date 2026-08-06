@@ -10,4 +10,5 @@ public interface IRepService
     Task LogoutAsync(Guid ownerUserId, Guid repId);
     Task DeactivateAsync(Guid ownerUserId, Guid repId);
     Task<RepResponse> RegenerateQrAsync(Guid ownerUserId, Guid repId);
+    Task<RepResponse> SetProductAccessAsync(Guid ownerUserId, Guid repId, UpdateRepProductAccessRequest request);
 }

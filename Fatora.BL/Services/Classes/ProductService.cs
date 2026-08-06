@@ -32,35 +32,33 @@ public class ProductService(AppDbContext dbContext) : IProductService
         return ToResponse(product);
     }
 
-    public async Task<List<ProductResponse>> GetAllAsync(Guid userId)
+    public async Task<List<ProductResponse>> GetAllAsync(Guid userId, Guid? scopeToRepId = null)
     {
-        var products = await dbContext.Products
-            .Where(p => p.UserId == userId && p.IsActive)
-            .OrderByDescending(p => p.CreatedAt)
-            .ToListAsync();
+        var query = dbContext.Products.Where(p => p.UserId == userId && p.IsActive);
+        query = await ApplyRepScopeAsync(query, scopeToRepId);
+
+        var products = await query.OrderByDescending(p => p.CreatedAt).ToListAsync();
 
         return products.Select(ToResponse).ToList();
     }
 
     // Newest-first, with a stable sort so Skip/Take means the same "page"
     // on every call.
-    public async Task<List<ProductResponse>> GetPagedAsync(Guid userId, int skip, int take)
+    public async Task<List<ProductResponse>> GetPagedAsync(Guid userId, int skip, int take, Guid? scopeToRepId = null)
     {
-        var products = await dbContext.Products
-            .Where(p => p.UserId == userId && p.IsActive)
-            .OrderByDescending(p => p.CreatedAt)
-            .Skip(skip)
-            .Take(take)
-            .ToListAsync();
+        var query = dbContext.Products.Where(p => p.UserId == userId && p.IsActive);
+        query = await ApplyRepScopeAsync(query, scopeToRepId);
+
+        var products = await query.OrderByDescending(p => p.CreatedAt).Skip(skip).Take(take).ToListAsync();
 
         return products.Select(ToResponse).ToList();
     }
 
-    public async Task<ProductResponse> GetByIdAsync(Guid userId, Guid id)
+    public async Task<ProductResponse> GetByIdAsync(Guid userId, Guid id, Guid? scopeToRepId = null)
     {
         var product = await FindOwnedActiveProduct(userId, id);
 
-        if (product is null)
+        if (product is null || !await IsVisibleToRepAsync(id, scopeToRepId))
         {
             throw new NotFoundException(nameof(Product), id);
         }
@@ -187,6 +185,32 @@ public class ProductService(AppDbContext dbContext) : IProductService
 
     private async Task<Product?> FindOwnedActiveProduct(Guid userId, Guid id) =>
         await dbContext.Products.FirstOrDefaultAsync(p => p.Id == id && p.UserId == userId && p.IsActive);
+
+    // Null scopeToRepId (the owner, or a Rep in the default All mode) never
+    // filters anything. A Restricted Rep only ever sees what's in its own
+    // RepProductAccess grants - see Rep.ProductAccessMode.
+    private async Task<IQueryable<Product>> ApplyRepScopeAsync(IQueryable<Product> query, Guid? scopeToRepId)
+    {
+        if (scopeToRepId is null) return query;
+
+        var rep = await dbContext.Reps.FirstOrDefaultAsync(r => r.Id == scopeToRepId);
+        if (rep is null || rep.ProductAccessMode == AccessMode.All) return query;
+
+        var allowedIds = dbContext.RepProductAccesses
+            .Where(a => a.RepId == scopeToRepId)
+            .Select(a => a.ProductId);
+        return query.Where(p => allowedIds.Contains(p.Id));
+    }
+
+    private async Task<bool> IsVisibleToRepAsync(Guid productId, Guid? scopeToRepId)
+    {
+        if (scopeToRepId is null) return true;
+
+        var rep = await dbContext.Reps.FirstOrDefaultAsync(r => r.Id == scopeToRepId);
+        if (rep is null || rep.ProductAccessMode == AccessMode.All) return true;
+
+        return await dbContext.RepProductAccesses.AnyAsync(a => a.RepId == scopeToRepId && a.ProductId == productId);
+    }
 
     private async Task<Product?> FindOwnedProduct(Guid userId, Guid id) =>
         await dbContext.Products.FirstOrDefaultAsync(p => p.Id == id && p.UserId == userId);

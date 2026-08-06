@@ -74,6 +74,36 @@ public class RepService(AppDbContext dbContext, IRepAuthService repAuthService) 
         return ToResponse(rep, includeQrToken: true);
     }
 
+    public async Task<RepResponse> SetProductAccessAsync(Guid ownerUserId, Guid repId, UpdateRepProductAccessRequest request)
+    {
+        var rep = await FindOwnedRep(ownerUserId, repId);
+
+        var existing = await dbContext.RepProductAccesses.Where(a => a.RepId == repId).ToListAsync();
+        dbContext.RepProductAccesses.RemoveRange(existing);
+
+        rep.ProductAccessMode = request.Mode;
+
+        if (request.Mode == AccessMode.Restricted)
+        {
+            // Silently drops any id that isn't actually one of this owner's
+            // own products - the caller is always the owner themselves, so
+            // this is guarding against a stale/mistaken id, not an
+            // adversarial one.
+            var requestedIds = request.ProductIds ?? [];
+            var ownedIds = await dbContext.Products
+                .Where(p => p.UserId == ownerUserId && requestedIds.Contains(p.Id))
+                .Select(p => p.Id)
+                .ToListAsync();
+
+            dbContext.RepProductAccesses.AddRange(
+                ownedIds.Select(productId => new RepProductAccess { RepId = repId, ProductId = productId }));
+        }
+
+        await dbContext.SaveChangesAsync();
+
+        return ToResponse(rep, includeQrToken: false);
+    }
+
     private async Task<Rep> FindOwnedRep(Guid ownerUserId, Guid repId)
     {
         var rep = await dbContext.Reps.FirstOrDefaultAsync(r => r.Id == repId && r.OwnerUserId == ownerUserId);
