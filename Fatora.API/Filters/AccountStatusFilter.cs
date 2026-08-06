@@ -1,5 +1,6 @@
 using Fatora.API.Extensions;
 using Fatora.BL.Exceptions;
+using Fatora.BL.Services.Abstractions;
 using Fatora.BL.Services.Classes;
 using Fatora.DAL.Data;
 using Microsoft.AspNetCore.Mvc.Filters;
@@ -11,13 +12,25 @@ namespace Fatora.API.Filters;
 // Runs on every authenticated request, not just login/refresh - an expired or suspended
 // SalesRep is locked out immediately, on whatever call they make next, not only at their
 // next sign-in. Admins are exempt: they don't have a subscription concept.
-public sealed class AccountStatusFilter(AppDbContext dbContext) : IAsyncAuthorizationFilter
+public sealed class AccountStatusFilter(AppDbContext dbContext, IRepAuthService repAuthService) : IAsyncAuthorizationFilter
 {
     public async Task OnAuthorizationAsync(AuthorizationFilterContext context)
     {
         var httpContext = context.HttpContext;
 
         if (httpContext.User.Identity?.IsAuthenticated != true || httpContext.User.IsInRole("Admin"))
+        {
+            return;
+        }
+
+        // A RepPendingSync token (see RepAuthService.GeneratePendingSyncToken)
+        // is deliberately exempt from every check below - it exists
+        // specifically so an already-blocked rep still has one narrow
+        // channel to hand over unsynced offline work. It can't reach
+        // anything else anyway: every other Rep/SalesRep-gated endpoint's
+        // own [Authorize(Roles = ...)] already rejects this role outright,
+        // since "RepPendingSync" satisfies neither.
+        if (httpContext.User.IsInRole("RepPendingSync"))
         {
             return;
         }
@@ -48,7 +61,14 @@ public sealed class AccountStatusFilter(AppDbContext dbContext) : IAsyncAuthoriz
             var tokenSessionVersion = int.Parse(httpContext.User.FindFirstValue("sessionVersion") ?? "0");
             if (!rep.IsActive || tokenSessionVersion != rep.SessionVersion)
             {
-                throw new ForbiddenException("This rep session has ended.", AccountStatusErrorCodes.RepSessionEnded);
+                // Same reasoning as TryRefreshAsync's equivalent rejection:
+                // the block itself is unconditional, but if this device
+                // still has unsynced offline work, this narrow, short-lived
+                // token is its one remaining chance to hand it over.
+                throw new ForbiddenException(
+                    "This rep session has ended.",
+                    AccountStatusErrorCodes.RepSessionEnded,
+                    new Dictionary<string, object> { ["pendingSyncToken"] = repAuthService.GeneratePendingSyncToken(rep) });
             }
 
             var ownerStatus = UserService.ComputeAccountStatus(rep.OwnerUser);

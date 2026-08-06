@@ -13,10 +13,21 @@ public abstract class AppException : Exception
         // same status code. Null for the common case where the message text is all the caller needs.
         public string? ErrorCode { get; }
 
-        protected AppException(string message, HttpStatusCode statusCode = HttpStatusCode.InternalServerError, string? errorCode = null)
+        // Extra structured data merged into the response body alongside the message/code - e.g. a
+        // short-lived token the frontend needs to react to this specific rejection (see
+        // RepAuthService's REP_SESSION_ENDED + pendingSyncToken). Null for the overwhelming
+        // majority of exceptions, which need nothing beyond a message and error code.
+        public IReadOnlyDictionary<string, object>? Extensions { get; }
+
+        protected AppException(
+            string message,
+            HttpStatusCode statusCode = HttpStatusCode.InternalServerError,
+            string? errorCode = null,
+            IReadOnlyDictionary<string, object>? extensions = null)
             : base(message)
         {
             StatusCode = statusCode;
             ErrorCode = errorCode;
+            Extensions = extensions;
         }
     }

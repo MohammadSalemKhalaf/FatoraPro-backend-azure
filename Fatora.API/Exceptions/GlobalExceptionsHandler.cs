@@ -37,6 +37,13 @@ public sealed class GlobalExceptionHandler(
             {
                 problemDetails.Extensions["code"] = errorCode;
             }
+            if (exception is AppException { Extensions: { } extraExtensions })
+            {
+                foreach (var (key, value) in extraExtensions)
+                {
+                    problemDetails.Extensions[key] = value;
+                }
+            }
 
             httpContext.Response.StatusCode = statusCode;
             // Written directly rather than through IProblemDetailsService -

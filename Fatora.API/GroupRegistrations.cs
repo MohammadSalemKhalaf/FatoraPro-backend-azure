@@ -30,6 +30,7 @@ public static class GroupRegistrations
         Services.AddScoped<IAdminRecoveryService, AdminRecoveryService>();
         Services.AddScoped<IRepService, RepService>();
         Services.AddScoped<IRepAuthService, RepAuthService>();
+        Services.AddScoped<IPendingRepSyncService, PendingRepSyncService>();
 
         Services.AddScoped<LoginRequestValidator>();
         Services.AddScoped<CreateRepRequestValidator>();

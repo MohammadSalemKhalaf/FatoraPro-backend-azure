@@ -69,8 +69,15 @@ public class RepAuthService(IConfiguration configuration, AppDbContext dbContext
         // time the device reconnects and tries to refresh).
         if (!storedToken.Rep.IsActive)
         {
+            // Carried alongside the rejection, not instead of it - the
+            // device still needs to land on "your session ended" either
+            // way. If it also has unsynced offline work, this narrow,
+            // short-lived token is its one remaining chance to hand that
+            // over for the owner to review before it's fully locked out.
             throw new UnauthorizedException(
-                "This rep session has ended.", AccountStatusErrorCodes.RepSessionEnded);
+                "This rep session has ended.",
+                AccountStatusErrorCodes.RepSessionEnded,
+                new Dictionary<string, object> { ["pendingSyncToken"] = GeneratePendingSyncToken(storedToken.Rep) });
         }
 
         var ownerStatus = UserService.ComputeAccountStatus(storedToken.Rep.OwnerUser);
@@ -91,14 +98,27 @@ public class RepAuthService(IConfiguration configuration, AppDbContext dbContext
         await dbContext.SaveChangesAsync();
     }
 
+    public string GeneratePendingSyncToken(Rep rep)
+    {
+        // Deliberately short - just long enough for a device that's already
+        // sitting on the response to make its one upload call, not a normal
+        // session lifetime. No sessionVersion/ownerId claim like a real Rep
+        // token carries: this role is authorized for exactly one endpoint
+        // (see AccountStatusFilter), which only needs to know whose batch
+        // this is.
+        var expiry = DateTime.UtcNow.AddMinutes(10);
+        var claims = new List<Claim>
+        {
+            new(JwtRegisteredClaimNames.Sub, rep.Id.ToString()),
+            new(ClaimTypes.Role, "RepPendingSync"),
+        };
+        return WriteToken(claims, expiry);
+    }
+
     private async Task<JwtTokenResponse> GenerateTokenAsync(Rep rep)
     {
-        var jwtSettings = configuration.GetSection("JwtSettings");
-
-        var issuer = jwtSettings["Issuer"];
-        var audience = jwtSettings["Audience"];
-        var key = jwtSettings["SecretKey"];
-        var expiry = DateTime.UtcNow.AddMinutes(int.Parse(jwtSettings["TokenExpirationInMinutes"]!));
+        var expiry = DateTime.UtcNow.AddMinutes(
+            int.Parse(configuration.GetSection("JwtSettings")["TokenExpirationInMinutes"]!));
 
         var claims = new List<Claim>
         {
@@ -108,29 +128,36 @@ public class RepAuthService(IConfiguration configuration, AppDbContext dbContext
             new("sessionVersion", rep.SessionVersion.ToString()),
         };
 
+        var accessToken = WriteToken(claims, expiry);
+        var rawRefreshToken = await IssueRefreshTokenAsync(rep);
+
+        return new JwtTokenResponse
+        {
+            AccessToken = accessToken,
+            RefreshToken = rawRefreshToken,
+            Expires = expiry,
+            Name = rep.Name
+        };
+    }
+
+    private string WriteToken(List<Claim> claims, DateTime expiry)
+    {
+        var jwtSettings = configuration.GetSection("JwtSettings");
+        var key = jwtSettings["SecretKey"];
+
         var descriptor = new SecurityTokenDescriptor
         {
             Subject = new ClaimsIdentity(claims),
             Expires = expiry,
-            Issuer = issuer,
-            Audience = audience,
+            Issuer = jwtSettings["Issuer"],
+            Audience = jwtSettings["Audience"],
             SigningCredentials = new SigningCredentials(
                 new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key!)),
                 SecurityAlgorithms.HmacSha256Signature)
         };
 
         var tokenHandler = new JwtSecurityTokenHandler();
-        var securityToken = tokenHandler.CreateToken(descriptor);
-
-        var rawRefreshToken = await IssueRefreshTokenAsync(rep);
-
-        return new JwtTokenResponse
-        {
-            AccessToken = tokenHandler.WriteToken(securityToken),
-            RefreshToken = rawRefreshToken,
-            Expires = expiry,
-            Name = rep.Name
-        };
+        return tokenHandler.WriteToken(tokenHandler.CreateToken(descriptor));
     }
 
     private async Task<string> IssueRefreshTokenAsync(Rep rep)

@@ -1,6 +1,7 @@
 namespace Fatora.BL.Services.Abstractions;
 
 using Fatora.BL.DTOs.Responses;
+using Fatora.DAL.Entites;
 
 public interface IRepAuthService
 {
@@ -14,4 +15,11 @@ public interface IRepAuthService
     Task<JwtTokenResponse?> TryRefreshAsync(string refreshToken);
 
     Task RevokeSessionAsync(Guid repId);
+
+    // A narrowly-scoped, short-lived token (Role=RepPendingSync) handed
+    // alongside a REP_SESSION_ENDED rejection - see AccountStatusFilter and
+    // TryRefreshAsync - so a device that had unsynced offline work when it
+    // got cut off still has one last, tightly-bounded channel to upload it
+    // for the owner's review instead of losing it outright.
+    string GeneratePendingSyncToken(Rep rep);
 }

@@ -20,6 +20,7 @@ namespace Fatora.API.Controllers;
 public class RepsController(
     IRepService repService,
     IRepAuthService repAuthService,
+    IPendingRepSyncService pendingRepSyncService,
     CreateRepRequestValidator createRepValidator) : ControllerBase
 {
     [Authorize(Roles = "SalesRep")]
@@ -125,6 +126,34 @@ public class RepsController(
     {
         var result = await repService.SetCustomerAccessAsync(User.GetUserId(), id, request);
         return Ok(result);
+    }
+
+    // Whether this rep had unsynced offline work queued through the
+    // narrow post-deactivation upload path (see PendingSyncController) -
+    // and if so, how much, so the owner can decide with real information
+    // instead of a blind "sync or discard".
+    [Authorize(Roles = "SalesRep")]
+    [HttpGet("{id:guid}/pending-sync")]
+    public async Task<IActionResult> GetPendingSync(Guid id)
+    {
+        var result = await pendingRepSyncService.GetSummaryAsync(User.GetUserId(), id);
+        return Ok(result);
+    }
+
+    [Authorize(Roles = "SalesRep")]
+    [HttpPost("{id:guid}/pending-sync/apply")]
+    public async Task<IActionResult> ApplyPendingSync(Guid id)
+    {
+        var result = await pendingRepSyncService.ApplyAsync(User.GetUserId(), id);
+        return Ok(result);
+    }
+
+    [Authorize(Roles = "SalesRep")]
+    [HttpPost("{id:guid}/pending-sync/discard")]
+    public async Task<IActionResult> DiscardPendingSync(Guid id)
+    {
+        await pendingRepSyncService.DiscardAsync(User.GetUserId(), id);
+        return NoContent();
     }
 
     // A rep has no username/password to authenticate with at this point -
