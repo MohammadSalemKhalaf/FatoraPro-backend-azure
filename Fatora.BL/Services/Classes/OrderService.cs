@@ -377,14 +377,31 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         return "Sent";
     }
 
-    // scopeToRepId null means "the owner, any of their customers" -
-    // non-null means "only this Rep's own customers" - see
-    // CustomerService.FindOwnedActiveCustomer for the identical rule and
-    // why: each sub-account's customer book is entirely separate.
-    private async Task<Customer?> FindOwnedActiveCustomer(Guid userId, Guid customerId, Guid? scopeToRepId) =>
-        await dbContext.Customers.FirstOrDefaultAsync(c =>
-            c.Id == customerId && c.UserId == userId && c.IsActive
-            && (scopeToRepId == null || c.CreatedByRepId == scopeToRepId));
+    // scopeToRepId null means "the owner, any of their customers" - non-null
+    // resolves through that Rep's own CustomerAccessMode - see
+    // CustomerService.FindOwnedActiveCustomer for the identical rule and the
+    // full rundown of what Own/All/Restricted each mean.
+    private async Task<Customer?> FindOwnedActiveCustomer(Guid userId, Guid customerId, Guid? scopeToRepId)
+    {
+        var customer = await dbContext.Customers.FirstOrDefaultAsync(c =>
+            c.Id == customerId && c.UserId == userId && c.IsActive);
+        if (customer is null) return null;
+
+        if (scopeToRepId is { } repId)
+        {
+            var rep = await dbContext.Reps.FirstOrDefaultAsync(r => r.Id == repId);
+            var visible = rep is null || rep.CustomerAccessMode switch
+            {
+                CustomerAccessMode.All => true,
+                CustomerAccessMode.Restricted => customer.CreatedByRepId == repId
+                    || await dbContext.RepCustomerAccesses.AnyAsync(a => a.RepId == repId && a.CustomerId == customerId),
+                _ => customer.CreatedByRepId == repId,
+            };
+            if (!visible) return null;
+        }
+
+        return customer;
+    }
 
     // scopeToRepId, when it names a Restricted rep, additionally requires
     // every product to be in that rep's own RepProductAccess grants - a

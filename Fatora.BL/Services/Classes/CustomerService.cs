@@ -31,11 +31,10 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
 
     public async Task<List<CustomerResponse>> GetAllAsync(Guid userId, Guid? scopeToRepId = null)
     {
-        var customers = await dbContext.Customers
-            .Where(c => c.UserId == userId && c.IsActive
-                && (scopeToRepId == null || c.CreatedByRepId == scopeToRepId))
-            .OrderByDescending(c => c.CreatedAt)
-            .ToListAsync();
+        var query = dbContext.Customers.Where(c => c.UserId == userId && c.IsActive);
+        query = await ApplyRepScopeAsync(query, scopeToRepId);
+
+        var customers = await query.OrderByDescending(c => c.CreatedAt).ToListAsync();
 
         return customers.Select(ToResponse).ToList();
     }
@@ -87,10 +86,10 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
 
     public async Task<List<CustomerResponse>> GetArchivedAsync(Guid userId, Guid? scopeToRepId = null)
     {
-        var customers = await dbContext.Customers
-            .Where(c => c.UserId == userId && !c.IsActive
-                && (scopeToRepId == null || c.CreatedByRepId == scopeToRepId))
-            .ToListAsync();
+        var query = dbContext.Customers.Where(c => c.UserId == userId && !c.IsActive);
+        query = await ApplyRepScopeAsync(query, scopeToRepId);
+
+        var customers = await query.ToListAsync();
 
         return customers.Select(ToResponse).ToList();
     }
@@ -124,20 +123,63 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
     }
 
     // scopeToRepId null means "the owner, sees everything under UserId" -
-    // non-null (always a Rep's own id in practice, see
-    // ClaimsPrincipalExtensions.GetRepIdOrNull) means "only what this Rep
-    // itself created," never another Rep's or the owner's own directly-
-    // created customers - each sub-account's customer book starts empty and
-    // stays entirely separate, per the feature's own design.
-    private async Task<Customer?> FindOwnedActiveCustomer(Guid userId, Guid id, Guid? scopeToRepId) =>
-        await dbContext.Customers.FirstOrDefaultAsync(c =>
-            c.Id == id && c.UserId == userId && c.IsActive
-            && (scopeToRepId == null || c.CreatedByRepId == scopeToRepId));
+    // non-null resolves through IsVisibleToRepAsync, which depends on that
+    // Rep's own CustomerAccessMode (see Rep.cs): Own (default, and every
+    // Rep's actual behavior before this mode existed) means only what it
+    // personally created; All opens the owner's entire shared customer
+    // book; Restricted limits it to an admin-picked subset, plus whatever
+    // it created itself.
+    private async Task<Customer?> FindOwnedActiveCustomer(Guid userId, Guid id, Guid? scopeToRepId)
+    {
+        var customer = await dbContext.Customers.FirstOrDefaultAsync(c => c.Id == id && c.UserId == userId && c.IsActive);
+        if (customer is null || !await IsVisibleToRepAsync(customer, scopeToRepId)) return null;
+        return customer;
+    }
 
-    private async Task<Customer?> FindOwnedCustomer(Guid userId, Guid id, Guid? scopeToRepId) =>
-        await dbContext.Customers.FirstOrDefaultAsync(c =>
-            c.Id == id && c.UserId == userId
-            && (scopeToRepId == null || c.CreatedByRepId == scopeToRepId));
+    private async Task<Customer?> FindOwnedCustomer(Guid userId, Guid id, Guid? scopeToRepId)
+    {
+        var customer = await dbContext.Customers.FirstOrDefaultAsync(c => c.Id == id && c.UserId == userId);
+        if (customer is null || !await IsVisibleToRepAsync(customer, scopeToRepId)) return null;
+        return customer;
+    }
+
+    // Null scopeToRepId (the owner) never filters. See the CustomerAccessMode
+    // rundown above FindOwnedActiveCustomer for what each mode means.
+    private async Task<IQueryable<Customer>> ApplyRepScopeAsync(IQueryable<Customer> query, Guid? scopeToRepId)
+    {
+        if (scopeToRepId is null) return query;
+
+        var rep = await dbContext.Reps.FirstOrDefaultAsync(r => r.Id == scopeToRepId);
+        if (rep is null || rep.CustomerAccessMode == CustomerAccessMode.All) return query;
+
+        if (rep.CustomerAccessMode == CustomerAccessMode.Restricted)
+        {
+            var allowedIds = dbContext.RepCustomerAccesses
+                .Where(a => a.RepId == scopeToRepId)
+                .Select(a => a.CustomerId);
+            return query.Where(c => c.CreatedByRepId == scopeToRepId || allowedIds.Contains(c.Id));
+        }
+
+        // Own (default)
+        return query.Where(c => c.CreatedByRepId == scopeToRepId);
+    }
+
+    private async Task<bool> IsVisibleToRepAsync(Customer customer, Guid? scopeToRepId)
+    {
+        if (scopeToRepId is null) return true;
+
+        var rep = await dbContext.Reps.FirstOrDefaultAsync(r => r.Id == scopeToRepId);
+        if (rep is null || rep.CustomerAccessMode == CustomerAccessMode.All) return true;
+
+        if (rep.CustomerAccessMode == CustomerAccessMode.Restricted)
+        {
+            return customer.CreatedByRepId == scopeToRepId
+                || await dbContext.RepCustomerAccesses.AnyAsync(a => a.RepId == scopeToRepId && a.CustomerId == customer.Id);
+        }
+
+        // Own (default)
+        return customer.CreatedByRepId == scopeToRepId;
+    }
 
     internal static CustomerResponse ToResponse(Customer customer) => new()
     {

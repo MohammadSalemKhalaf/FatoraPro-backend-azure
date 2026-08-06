@@ -9,9 +9,9 @@ namespace Fatora.BL.Services.Classes;
 
 public class ReportService(AppDbContext dbContext) : IReportService
 {
-    public async Task<List<SalesBucketResponse>> GetSalesAsync(Guid userId, SummaryPeriod period)
+    public async Task<List<SalesBucketResponse>> GetSalesAsync(Guid userId, SummaryPeriod period, Guid? scopeToRepId = null)
     {
-        var orders = await LoadOrdersForPeriod(userId, period);
+        var orders = await LoadOrdersForPeriod(userId, period, scopeToRepId);
 
         return period switch
         {
@@ -22,7 +22,7 @@ public class ReportService(AppDbContext dbContext) : IReportService
         };
     }
 
-    public async Task<List<ItemReportResponse>> GetItemsAsync(Guid userId, SummaryPeriod period, ItemsSortBy sortBy)
+    public async Task<List<ItemReportResponse>> GetItemsAsync(Guid userId, SummaryPeriod period, ItemsSortBy sortBy, Guid? scopeToRepId = null)
     {
         var cutoff = GetCutoff(period);
 
@@ -34,6 +34,15 @@ public class ReportService(AppDbContext dbContext) : IReportService
         if (cutoff is not null)
         {
             query = query.Where(oi => oi.Order.CreatedAt >= cutoff);
+        }
+
+        // Items are only ever reported through the orders that sold them,
+        // so this follows the same rule as every other rep-scoped list: an
+        // order (and therefore its line items) belongs exclusively to
+        // whichever Rep created it - see LoadOrdersForPeriod.
+        if (scopeToRepId is not null)
+        {
+            query = query.Where(oi => oi.Order.CreatedByRepId == scopeToRepId);
         }
 
         var orderItems = await query.ToListAsync();
@@ -56,9 +65,9 @@ public class ReportService(AppDbContext dbContext) : IReportService
         return grouped.Take(10).ToList();
     }
 
-    public async Task<List<ClientReportResponse>> GetClientsAsync(Guid userId, SummaryPeriod period, ClientsSortBy sortBy)
+    public async Task<List<ClientReportResponse>> GetClientsAsync(Guid userId, SummaryPeriod period, ClientsSortBy sortBy, Guid? scopeToRepId = null)
     {
-        var orders = await LoadOrdersForPeriod(userId, period);
+        var orders = await LoadOrdersForPeriod(userId, period, scopeToRepId);
 
         var grouped = orders
             .GroupBy(o => o.CustomerId)
@@ -77,11 +86,16 @@ public class ReportService(AppDbContext dbContext) : IReportService
         return grouped.Take(10).ToList();
     }
 
-    private async Task<List<Order>> LoadOrdersForPeriod(Guid userId, SummaryPeriod period)
+    // scopeToRepId null means "the owner, every order" - non-null means
+    // "only this Rep's own orders," same exclusive-ownership rule
+    // OrdersController.GetAll already applies (an order belongs to whoever
+    // raised it, independent of that Rep's customer/product access mode).
+    private async Task<List<Order>> LoadOrdersForPeriod(Guid userId, SummaryPeriod period, Guid? scopeToRepId = null)
     {
         var cutoff = GetCutoff(period);
 
-        var query = dbContext.Orders.Include(o => o.Customer).Where(o => o.UserId == userId);
+        var query = dbContext.Orders.Include(o => o.Customer)
+            .Where(o => o.UserId == userId && (scopeToRepId == null || o.CreatedByRepId == scopeToRepId));
 
         if (cutoff is not null)
         {

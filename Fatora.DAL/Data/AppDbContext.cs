@@ -21,6 +21,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Rep> Reps { get; set; }
     public DbSet<RepRefreshToken> RepRefreshTokens { get; set; }
     public DbSet<RepProductAccess> RepProductAccesses { get; set; }
+    public DbSet<RepCustomerAccess> RepCustomerAccesses { get; set; }
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

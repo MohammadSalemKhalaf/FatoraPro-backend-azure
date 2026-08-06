@@ -51,15 +51,15 @@ public class SyncService(AppDbContext dbContext) : ISyncService
     {
         var serverTime = DateTime.UtcNow;
 
-        // Products are never Rep-scoped in R1 (every Rep sees the full
-        // catalog by default - see Rep.ProductAccessMode) - Customers/
-        // Orders/Receipts are, so a Rep's own device only ever pulls down
-        // its own slice, never another Rep's or the owner's directly-
-        // created records.
-        var customers = await dbContext.Customers
-            .Where(c => c.UserId == userId && c.UpdatedAt > since
-                && (scopeToRepId == null || c.CreatedByRepId == scopeToRepId))
-            .ToListAsync();
+        // Products are never Rep-scoped (every Rep sees the full catalog by
+        // default - see Rep.ProductAccessMode). Orders/Receipts always pull
+        // only what this Rep itself created. Customers depend on the Rep's
+        // own CustomerAccessMode - see ApplyCustomerRepScopeAsync - so an
+        // All/Restricted Rep's device also pulls down the customers it's
+        // been given shared access to, not only the ones it created.
+        var customersQuery = dbContext.Customers.Where(c => c.UserId == userId && c.UpdatedAt > since);
+        customersQuery = await ApplyCustomerRepScopeAsync(customersQuery, scopeToRepId);
+        var customers = await customersQuery.ToListAsync();
 
         var products = await dbContext.Products
             .Where(p => p.UserId == userId && p.UpdatedAt > since)
@@ -90,9 +90,7 @@ public class SyncService(AppDbContext dbContext) : ISyncService
     {
         try
         {
-            var existing = await dbContext.Customers.FirstOrDefaultAsync(c =>
-                c.Id == item.Id && c.UserId == userId
-                && (scopeToRepId == null || c.CreatedByRepId == scopeToRepId));
+            var existing = await FindVisibleCustomerAsync(userId, item.Id, scopeToRepId);
 
             if (existing is null)
             {
@@ -199,9 +197,7 @@ public class SyncService(AppDbContext dbContext) : ISyncService
 
             if (existing is null)
             {
-                var customer = await dbContext.Customers.FirstOrDefaultAsync(c =>
-                    c.Id == item.CustomerId && c.UserId == userId
-                    && (scopeToRepId == null || c.CreatedByRepId == scopeToRepId));
+                var customer = await FindVisibleCustomerAsync(userId, item.CustomerId, scopeToRepId);
 
                 if (customer is null)
                 {
@@ -264,9 +260,7 @@ public class SyncService(AppDbContext dbContext) : ISyncService
                 return new SyncItemResult(item.Id, "Rejected", "Cannot edit an invoice that has already been paid in full.");
             }
 
-            var newCustomer = await dbContext.Customers.FirstOrDefaultAsync(c =>
-                c.Id == item.CustomerId && c.UserId == userId
-                && (scopeToRepId == null || c.CreatedByRepId == scopeToRepId));
+            var newCustomer = await FindVisibleCustomerAsync(userId, item.CustomerId, scopeToRepId);
 
             if (newCustomer is null)
             {
@@ -365,9 +359,7 @@ public class SyncService(AppDbContext dbContext) : ISyncService
 
             if (existing is null)
             {
-                var customer = await dbContext.Customers.FirstOrDefaultAsync(c =>
-                    c.Id == item.CustomerId && c.UserId == userId
-                    && (scopeToRepId == null || c.CreatedByRepId == scopeToRepId));
+                var customer = await FindVisibleCustomerAsync(userId, item.CustomerId, scopeToRepId);
 
                 if (customer is null)
                 {
@@ -434,6 +426,49 @@ public class SyncService(AppDbContext dbContext) : ISyncService
         {
             return new SyncItemResult(orderId, "Rejected", ex.Message);
         }
+    }
+
+    // See CustomerService.FindOwnedActiveCustomer - same CustomerAccessMode
+    // enforcement (Own/All/Restricted), mirrored here so a Rep can't reach a
+    // customer it shouldn't through the sync push path instead of the plain
+    // REST one. Unlike the REST side this isn't restricted to *active*
+    // customers only - PushCustomerAsync/PushOrderAsync/PushReceiptAsync all
+    // reuse this same lookup for both fresh inserts and reconciling an
+    // update to a customer that might have been archived since.
+    private async Task<Customer?> FindVisibleCustomerAsync(Guid userId, Guid customerId, Guid? scopeToRepId)
+    {
+        var customer = await dbContext.Customers.FirstOrDefaultAsync(c => c.Id == customerId && c.UserId == userId);
+        if (customer is null || scopeToRepId is not { } repId) return customer;
+
+        var rep = await dbContext.Reps.FirstOrDefaultAsync(r => r.Id == repId);
+        var visible = rep is null || rep.CustomerAccessMode switch
+        {
+            CustomerAccessMode.All => true,
+            CustomerAccessMode.Restricted => customer.CreatedByRepId == repId
+                || await dbContext.RepCustomerAccesses.AnyAsync(a => a.RepId == repId && a.CustomerId == customerId),
+            _ => customer.CreatedByRepId == repId,
+        };
+        return visible ? customer : null;
+    }
+
+    // Queryable counterpart of FindVisibleCustomerAsync, for PullAsync's
+    // whole-list fetch.
+    private async Task<IQueryable<Customer>> ApplyCustomerRepScopeAsync(IQueryable<Customer> query, Guid? scopeToRepId)
+    {
+        if (scopeToRepId is null) return query;
+
+        var rep = await dbContext.Reps.FirstOrDefaultAsync(r => r.Id == scopeToRepId);
+        if (rep is null || rep.CustomerAccessMode == CustomerAccessMode.All) return query;
+
+        if (rep.CustomerAccessMode == CustomerAccessMode.Restricted)
+        {
+            var allowedIds = dbContext.RepCustomerAccesses
+                .Where(a => a.RepId == scopeToRepId)
+                .Select(a => a.CustomerId);
+            return query.Where(c => c.CreatedByRepId == scopeToRepId || allowedIds.Contains(c.Id));
+        }
+
+        return query.Where(c => c.CreatedByRepId == scopeToRepId);
     }
 
     // See OrderService.LoadOwnedActiveProducts - same rep-restriction

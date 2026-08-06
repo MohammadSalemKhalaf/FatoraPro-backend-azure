@@ -38,18 +38,24 @@ public class ProductsController(
 
     // skip/take are optional and additive - omitting both preserves the
     // original "return everything" behavior existing callers (invoice
-    // product picker, data export, barcode lookups) still rely on.
+    // product picker, data export, barcode lookups) still rely on. repId
+    // lets the owner see what one particular rep can actually see - an All
+    // rep returns everything, a Restricted one only its granted subset (see
+    // ProductService.ApplyRepScopeAsync) - a Rep session's own calls stay
+    // scoped to its own id regardless.
     [HttpGet]
-    public async Task<IActionResult> GetAll([FromQuery] int? skip, [FromQuery] int? take)
+    public async Task<IActionResult> GetAll([FromQuery] int? skip, [FromQuery] int? take, [FromQuery] Guid? repId)
     {
+        var scopeToRepId = User.GetRepIdOrNull() ?? repId;
+
         if (skip is null && take is null)
         {
-            var all = await productService.GetAllAsync(User.GetEffectiveOwnerId(), User.GetRepIdOrNull());
+            var all = await productService.GetAllAsync(User.GetEffectiveOwnerId(), scopeToRepId);
             return Ok(all);
         }
 
         var result = await productService.GetPagedAsync(
-            User.GetEffectiveOwnerId(), skip ?? 0, Math.Clamp(take ?? 20, 1, 100), User.GetRepIdOrNull());
+            User.GetEffectiveOwnerId(), skip ?? 0, Math.Clamp(take ?? 20, 1, 100), scopeToRepId);
         return Ok(result);
     }
 

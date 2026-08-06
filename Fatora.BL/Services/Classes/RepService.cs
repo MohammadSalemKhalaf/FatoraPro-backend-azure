@@ -71,6 +71,20 @@ public class RepService(AppDbContext dbContext, IRepAuthService repAuthService) 
         await repAuthService.RevokeSessionAsync(rep.Id);
     }
 
+    public async Task<RepResponse> ReactivateAsync(Guid ownerUserId, Guid repId)
+    {
+        var rep = await FindOwnedRep(ownerUserId, repId);
+
+        rep.IsActive = true;
+        await dbContext.SaveChangesAsync();
+
+        // The QrToken was never touched by DeactivateAsync, so the rep's
+        // existing QR image immediately works again - including it here
+        // (like RegenerateQrAsync does) lets the detail screen just take
+        // this response as-is instead of making a second GetByIdAsync call.
+        return ToResponse(rep, includeQrToken: true);
+    }
+
     public async Task<RepResponse> RegenerateQrAsync(Guid ownerUserId, Guid repId)
     {
         var rep = await FindOwnedRep(ownerUserId, repId);
@@ -112,6 +126,58 @@ public class RepService(AppDbContext dbContext, IRepAuthService repAuthService) 
         await dbContext.SaveChangesAsync();
 
         return ToResponse(rep, includeQrToken: false);
+    }
+
+    public async Task<RepResponse> SetCustomerAccessAsync(Guid ownerUserId, Guid repId, UpdateRepCustomerAccessRequest request)
+    {
+        var rep = await FindOwnedRep(ownerUserId, repId);
+
+        var existing = await dbContext.RepCustomerAccesses.Where(a => a.RepId == repId).ToListAsync();
+        dbContext.RepCustomerAccesses.RemoveRange(existing);
+
+        rep.CustomerAccessMode = request.Mode;
+
+        if (request.Mode == CustomerAccessMode.Restricted)
+        {
+            // Silently drops any id that isn't actually one of this owner's
+            // own customers - the caller is always the owner themselves, so
+            // this is guarding against a stale/mistaken id, not an
+            // adversarial one. Mirrors SetProductAccessAsync exactly.
+            var requestedIds = request.CustomerIds ?? [];
+            var ownedIds = await dbContext.Customers
+                .Where(c => c.UserId == ownerUserId && requestedIds.Contains(c.Id))
+                .Select(c => c.Id)
+                .ToListAsync();
+
+            dbContext.RepCustomerAccesses.AddRange(
+                ownedIds.Select(customerId => new RepCustomerAccess { RepId = repId, CustomerId = customerId }));
+        }
+
+        await dbContext.SaveChangesAsync();
+
+        return ToResponse(rep, includeQrToken: false);
+    }
+
+    public async Task<RepAccessListResponse> GetProductAccessAsync(Guid ownerUserId, Guid repId)
+    {
+        var rep = await FindOwnedRep(ownerUserId, repId);
+        var ids = await dbContext.RepProductAccesses
+            .Where(a => a.RepId == repId)
+            .Select(a => a.ProductId)
+            .ToListAsync();
+
+        return new RepAccessListResponse { Mode = rep.ProductAccessMode.ToString(), Ids = ids };
+    }
+
+    public async Task<RepAccessListResponse> GetCustomerAccessAsync(Guid ownerUserId, Guid repId)
+    {
+        var rep = await FindOwnedRep(ownerUserId, repId);
+        var ids = await dbContext.RepCustomerAccesses
+            .Where(a => a.RepId == repId)
+            .Select(a => a.CustomerId)
+            .ToListAsync();
+
+        return new RepAccessListResponse { Mode = rep.CustomerAccessMode.ToString(), Ids = ids };
     }
 
     private async Task<Rep> FindOwnedRep(Guid ownerUserId, Guid repId)

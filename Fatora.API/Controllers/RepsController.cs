@@ -57,6 +57,13 @@ public class RepsController(
         return NoContent();
     }
 
+    [HttpPost("{id:guid}/reactivate")]
+    public async Task<IActionResult> Reactivate(Guid id)
+    {
+        var result = await repService.ReactivateAsync(User.GetUserId(), id);
+        return Ok(result);
+    }
+
     [HttpPost("{id:guid}/regenerate-qr")]
     public async Task<IActionResult> RegenerateQr(Guid id)
     {
@@ -64,10 +71,31 @@ public class RepsController(
         return Ok(result);
     }
 
+    [HttpGet("{id:guid}/product-access")]
+    public async Task<IActionResult> GetProductAccess(Guid id)
+    {
+        var result = await repService.GetProductAccessAsync(User.GetUserId(), id);
+        return Ok(result);
+    }
+
     [HttpPut("{id:guid}/product-access")]
     public async Task<IActionResult> SetProductAccess(Guid id, UpdateRepProductAccessRequest request)
     {
         var result = await repService.SetProductAccessAsync(User.GetUserId(), id, request);
+        return Ok(result);
+    }
+
+    [HttpGet("{id:guid}/customer-access")]
+    public async Task<IActionResult> GetCustomerAccess(Guid id)
+    {
+        var result = await repService.GetCustomerAccessAsync(User.GetUserId(), id);
+        return Ok(result);
+    }
+
+    [HttpPut("{id:guid}/customer-access")]
+    public async Task<IActionResult> SetCustomerAccess(Guid id, UpdateRepCustomerAccessRequest request)
+    {
+        var result = await repService.SetCustomerAccessAsync(User.GetUserId(), id, request);
         return Ok(result);
     }
 

@@ -8,6 +8,22 @@ public enum AccessMode
     Restricted
 }
 
+// Distinct from AccessMode (Product) because Products are never rep-owned
+// to begin with - a Rep only ever picks from the shared catalog, so "All"
+// vs "Restricted" is the only real distinction there. Customers ARE
+// rep-owned (CreatedByRepId), so a third state is meaningful: Own is every
+// Rep's actual behavior before this mode existed at all (each sub-account's
+// customer book starts empty and stays its own), All opens up the owner's
+// entire shared customer book, Restricted hands a Rep an admin-picked
+// subset of it (via RepCustomerAccess) while still always letting it see
+// whatever it personally created itself.
+public enum CustomerAccessMode
+{
+    Own,
+    All,
+    Restricted
+}
+
 /// A sub-account under a SalesRep-tier User ("مدير مبيعات" once they've
 /// opted into IsSalesManager) - logs in only via QrToken, never a
 /// username/password. Permanent once created: logging out or losing a
@@ -34,7 +50,7 @@ public class Rep
     public bool IsActive { get; set; } = true;
 
     public AccessMode ProductAccessMode { get; set; } = AccessMode.All;
-    public AccessMode CustomerAccessMode { get; set; } = AccessMode.All;
+    public CustomerAccessMode CustomerAccessMode { get; set; } = CustomerAccessMode.Own;
 
     public DateTime CreatedAt { get; set; }
 }
