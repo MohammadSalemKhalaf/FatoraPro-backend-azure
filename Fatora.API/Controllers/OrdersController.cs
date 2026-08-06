@@ -10,7 +10,7 @@ namespace Fatora.API.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-[Authorize(Roles = "SalesRep")]
+[Authorize(Roles = "SalesRep,Rep")]
 public class OrdersController(
     IOrderService orderService,
     CreateOrderRequestValidator createOrderValidator,
@@ -26,38 +26,43 @@ public class OrdersController(
             return BadRequest(validationResult.Errors);
         }
 
-        var result = await orderService.CreateAsync(User.GetUserId(), request);
+        var result = await orderService.CreateAsync(User.GetEffectiveOwnerId(), request, User.GetRepIdOrNull());
         return StatusCode(StatusCodes.Status201Created, result);
     }
 
     // skip/take are optional and additive: omitting both preserves the
     // original "return everything" behavior existing callers (customer
     // invoice history, data export, barcode lookups) still rely on. Only the
-    // paginated invoice list passes them.
+    // paginated invoice list passes them. repId lets the owner narrow the
+    // list to one rep's own invoices - a Rep session ignores it and is
+    // always scoped to its own id regardless (see scopeToRepId below).
     [HttpGet]
-    public async Task<IActionResult> GetAll([FromQuery] int? skip, [FromQuery] int? take)
+    public async Task<IActionResult> GetAll([FromQuery] int? skip, [FromQuery] int? take, [FromQuery] Guid? repId)
     {
+        var scopeToRepId = User.GetRepIdOrNull() ?? repId;
+
         if (skip is null && take is null)
         {
-            var all = await orderService.GetAllAsync(User.GetUserId());
+            var all = await orderService.GetAllAsync(User.GetEffectiveOwnerId(), scopeToRepId);
             return Ok(all);
         }
 
-        var result = await orderService.GetPagedAsync(User.GetUserId(), skip ?? 0, Math.Clamp(take ?? 20, 1, 100));
+        var result = await orderService.GetPagedAsync(
+            User.GetEffectiveOwnerId(), skip ?? 0, Math.Clamp(take ?? 20, 1, 100), scopeToRepId);
         return Ok(result);
     }
 
     [HttpGet("summary")]
     public async Task<IActionResult> GetSummary([FromQuery] SummaryPeriod period = SummaryPeriod.All)
     {
-        var result = await orderService.GetSummaryAsync(User.GetUserId(), period);
+        var result = await orderService.GetSummaryAsync(User.GetEffectiveOwnerId(), period);
         return Ok(result);
     }
 
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById(Guid id)
     {
-        var result = await orderService.GetByIdAsync(User.GetUserId(), id);
+        var result = await orderService.GetByIdAsync(User.GetEffectiveOwnerId(), id, User.GetRepIdOrNull());
         return Ok(result);
     }
 
@@ -70,14 +75,14 @@ public class OrdersController(
             return BadRequest(validationResult.Errors);
         }
 
-        var result = await orderService.UpdateAsync(User.GetUserId(), id, request);
+        var result = await orderService.UpdateAsync(User.GetEffectiveOwnerId(), id, request, User.GetRepIdOrNull());
         return Ok(result);
     }
 
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id)
     {
-        await orderService.DeleteAsync(User.GetUserId(), id);
+        await orderService.DeleteAsync(User.GetEffectiveOwnerId(), id, User.GetRepIdOrNull());
         return NoContent();
     }
 
@@ -90,7 +95,7 @@ public class OrdersController(
             return BadRequest(validationResult.Errors);
         }
 
-        var result = await orderService.RecordPaymentAsync(User.GetUserId(), id, request);
+        var result = await orderService.RecordPaymentAsync(User.GetEffectiveOwnerId(), id, request, User.GetRepIdOrNull());
         return Ok(result);
     }
 }

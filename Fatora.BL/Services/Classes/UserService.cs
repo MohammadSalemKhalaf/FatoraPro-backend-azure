@@ -239,6 +239,19 @@ public class UserService(AppDbContext dbContext, IPasswordHasherService password
         await dbContext.SaveChangesAsync();
     }
 
+    // A one-way switch for now - see User.IsSalesManager. Idempotent:
+    // calling it again on an account that's already a manager is a no-op,
+    // not an error.
+    public async Task<UserResponse> EnableSalesManagerAsync(Guid userId)
+    {
+        var user = await FindUser(userId);
+
+        user.IsSalesManager = true;
+        await dbContext.SaveChangesAsync();
+
+        return ToResponse(user);
+    }
+
     private async Task<User> FindUser(Guid userId)
     {
         var user = await dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId);
@@ -309,6 +322,7 @@ public class UserService(AppDbContext dbContext, IPasswordHasherService password
         Street = user.Street,
         Role = user.Role.ToString(),
         IsActive = user.IsActive,
+        IsSalesManager = user.IsSalesManager,
         BankName = user.BankName,
         AccountNumber = user.AccountNumber,
         IBAN = user.IBAN,

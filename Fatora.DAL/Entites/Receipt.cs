@@ -19,4 +19,8 @@ public class Receipt : ISyncableEntity
 
     public Guid UserId { get; set; }
     public User User { get; set; }
+
+    // See Order.CreatedByRepId - same idea, same reasoning.
+    public Guid? CreatedByRepId { get; set; }
+    public Rep? CreatedByRep { get; set; }
 }

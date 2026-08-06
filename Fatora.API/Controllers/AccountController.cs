@@ -70,6 +70,14 @@ public class AccountController(
         return NoContent();
     }
 
+    [Authorize(Roles = "SalesRep")]
+    [HttpPost("enable-sales-manager")]
+    public async Task<IActionResult> EnableSalesManager()
+    {
+        var result = await userService.EnableSalesManagerAsync(User.GetUserId());
+        return Ok(result);
+    }
+
     [Authorize]
     [HttpPost("change-password")]
     public async Task<IActionResult> ChangePassword(ChangePasswordRequest request)

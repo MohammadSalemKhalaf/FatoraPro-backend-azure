@@ -49,4 +49,11 @@ public class Order : ISyncableEntity
     public User User { get; set; }
     public List<OrderItem> OrderItems { get; set; } = new List<OrderItem>();
 
+    // Which sub-account (if any) actually created this invoice - UserId
+    // above still always resolves to the owning business, unchanged, so
+    // every existing report/sync/CSV/PDF path keeps working without knowing
+    // Reps exist at all. Null for anything created directly by the owner.
+    // Never set on delete/reassignment - see Rep.cs.
+    public Guid? CreatedByRepId { get; set; }
+    public Rep? CreatedByRep { get; set; }
 }

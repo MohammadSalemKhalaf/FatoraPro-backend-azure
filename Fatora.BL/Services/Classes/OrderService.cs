@@ -18,9 +18,9 @@ public class OrderService(AppDbContext dbContext) : IOrderService
     private const decimal AmountTolerance = 0.01m;
 
 
-    public async Task<OrderResponse> CreateAsync(Guid userId, CreateOrderRequest request)
+    public async Task<OrderResponse> CreateAsync(Guid userId, CreateOrderRequest request, Guid? createdByRepId = null)
     {
-        var customer = await FindOwnedActiveCustomer(userId, request.CustomerId);
+        var customer = await FindOwnedActiveCustomer(userId, request.CustomerId, createdByRepId);
 
         if (customer is null)
         {
@@ -39,6 +39,7 @@ public class OrderService(AppDbContext dbContext) : IOrderService
             InvoiceNumber = await GenerateInvoiceNumberAsync(userId),
             CustomerId = customer.Id,
             UserId = userId,
+            CreatedByRepId = createdByRepId,
             DueDate = request.DueDate,
             Discount = request.Discount,
             Notes = request.Notes,
@@ -66,11 +67,11 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         return ToResponse(order);
     }
 
-    public async Task<List<OrderResponse>> GetAllAsync(Guid userId)
+    public async Task<List<OrderResponse>> GetAllAsync(Guid userId, Guid? scopeToRepId = null)
     {
         var orders = await dbContext.Orders
             .Include(o => o.Customer)
-            .Where(o => o.UserId == userId)
+            .Where(o => o.UserId == userId && (scopeToRepId == null || o.CreatedByRepId == scopeToRepId))
             .ToListAsync();
 
         return orders.Select(ToResponse).ToList();
@@ -78,11 +79,11 @@ public class OrderService(AppDbContext dbContext) : IOrderService
 
     // Newest-first, matching the order the invoice list has always shown -
     // a stable sort is required for Skip/Take to mean the same "page" twice.
-    public async Task<List<OrderResponse>> GetPagedAsync(Guid userId, int skip, int take)
+    public async Task<List<OrderResponse>> GetPagedAsync(Guid userId, int skip, int take, Guid? scopeToRepId = null)
     {
         var orders = await dbContext.Orders
             .Include(o => o.Customer)
-            .Where(o => o.UserId == userId)
+            .Where(o => o.UserId == userId && (scopeToRepId == null || o.CreatedByRepId == scopeToRepId))
             .OrderByDescending(o => o.CreatedAt)
             .Skip(skip)
             .Take(take)
@@ -91,9 +92,9 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         return orders.Select(ToResponse).ToList();
     }
 
-    public async Task<OrderResponse> GetByIdAsync(Guid userId, Guid id)
+    public async Task<OrderResponse> GetByIdAsync(Guid userId, Guid id, Guid? scopeToRepId = null)
     {
-        var order = await FindOwnedOrder(userId, id);
+        var order = await FindOwnedOrder(userId, id, scopeToRepId);
 
         if (order is null)
         {
@@ -103,9 +104,9 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         return ToResponse(order);
     }
 
-    public async Task<OrderResponse> UpdateAsync(Guid userId, Guid id, UpdateOrderRequest request)
+    public async Task<OrderResponse> UpdateAsync(Guid userId, Guid id, UpdateOrderRequest request, Guid? scopeToRepId = null)
     {
-        var order = await FindOwnedOrder(userId, id);
+        var order = await FindOwnedOrder(userId, id, scopeToRepId);
 
         if (order is null)
         {
@@ -117,7 +118,7 @@ public class OrderService(AppDbContext dbContext) : IOrderService
             throw new BadRequestException("Cannot edit an invoice that has already been paid in full.");
         }
 
-        var customer = await FindOwnedActiveCustomer(userId, request.CustomerId);
+        var customer = await FindOwnedActiveCustomer(userId, request.CustomerId, scopeToRepId);
 
         if (customer is null)
         {
@@ -197,9 +198,10 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         return ToResponse(order);
     }
 
-    public async Task DeleteAsync(Guid userId, Guid id)
+    public async Task DeleteAsync(Guid userId, Guid id, Guid? scopeToRepId = null)
     {
-        var order = await dbContext.Orders.FirstOrDefaultAsync(o => o.Id == id && o.UserId == userId);
+        var order = await dbContext.Orders.FirstOrDefaultAsync(o =>
+            o.Id == id && o.UserId == userId && (scopeToRepId == null || o.CreatedByRepId == scopeToRepId));
 
         if (order is null)
         {
@@ -217,9 +219,9 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         await dbContext.SaveChangesAsync();
     }
 
-    public async Task<OrderResponse> RecordPaymentAsync(Guid userId, Guid id, RecordPaymentRequest request)
+    public async Task<OrderResponse> RecordPaymentAsync(Guid userId, Guid id, RecordPaymentRequest request, Guid? scopeToRepId = null)
     {
-        var order = await FindOwnedOrder(userId, id);
+        var order = await FindOwnedOrder(userId, id, scopeToRepId);
 
         if (order is null)
         {
@@ -375,8 +377,14 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         return "Sent";
     }
 
-    private async Task<Customer?> FindOwnedActiveCustomer(Guid userId, Guid customerId) =>
-        await dbContext.Customers.FirstOrDefaultAsync(c => c.Id == customerId && c.UserId == userId && c.IsActive);
+    // scopeToRepId null means "the owner, any of their customers" -
+    // non-null means "only this Rep's own customers" - see
+    // CustomerService.FindOwnedActiveCustomer for the identical rule and
+    // why: each sub-account's customer book is entirely separate.
+    private async Task<Customer?> FindOwnedActiveCustomer(Guid userId, Guid customerId, Guid? scopeToRepId) =>
+        await dbContext.Customers.FirstOrDefaultAsync(c =>
+            c.Id == customerId && c.UserId == userId && c.IsActive
+            && (scopeToRepId == null || c.CreatedByRepId == scopeToRepId));
 
     private async Task<Dictionary<Guid, Product>?> LoadOwnedActiveProducts(Guid userId, List<OrderItemRequest> items)
     {
@@ -389,8 +397,9 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         return products.Count == productIds.Count ? products.ToDictionary(p => p.Id) : null;
     }
 
-    private async Task<Order?> FindOwnedOrder(Guid userId, Guid id) =>
-        await dbContext.Orders.Include(o => o.Customer).FirstOrDefaultAsync(o => o.Id == id && o.UserId == userId);
+    private async Task<Order?> FindOwnedOrder(Guid userId, Guid id, Guid? scopeToRepId) =>
+        await dbContext.Orders.Include(o => o.Customer).FirstOrDefaultAsync(o =>
+            o.Id == id && o.UserId == userId && (scopeToRepId == null || o.CreatedByRepId == scopeToRepId));
 
     private async Task<string> GenerateInvoiceNumberAsync(Guid userId)
     {

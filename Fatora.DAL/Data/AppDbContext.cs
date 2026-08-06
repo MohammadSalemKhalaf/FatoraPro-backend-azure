@@ -18,6 +18,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
     public DbSet<Order> Orders { get; set; }
     public DbSet<Receipt> Receipts { get; set; }
+    public DbSet<Rep> Reps { get; set; }
+    public DbSet<RepRefreshToken> RepRefreshTokens { get; set; }
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

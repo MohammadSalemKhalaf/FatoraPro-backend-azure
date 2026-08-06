@@ -33,6 +33,13 @@ public class User
     public string? Street { get; set; }
     public Role Role { get; set; }=Role.SalesRep;
     public bool IsActive { get; set; } = true;
+
+    // Explicit, owner-initiated switch (see AccountController's
+    // enable-sales-manager action) - everything Rep-related on this
+    // account's own side (rep management, the rep filter elsewhere) stays
+    // hidden until this is true. Unrelated to the platform-level Admin/
+    // SalesRep Role above - see Rep.cs for why these are separate concepts.
+    public bool IsSalesManager { get; set; } = false;
     public string? BankName { get; set; }
     public string? AccountNumber { get; set; }
     public string? IBAN { get; set; }

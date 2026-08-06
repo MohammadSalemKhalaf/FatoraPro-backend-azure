@@ -9,15 +9,20 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Fatora.API.Controllers;
 
+// Class-level "SalesRep,Rep" covers the read actions (a Rep only ever
+// picks from the business's existing catalog) - every mutating action
+// below overrides back down to "SalesRep" only, since Reps never create,
+// edit, or delete products.
 [Route("api/[controller]")]
 [ApiController]
-[Authorize(Roles = "SalesRep")]
+[Authorize(Roles = "SalesRep,Rep")]
 public class ProductsController(
     IProductService productService,
     IFileStorageService fileStorageService,
     CreateProductRequestValidator createValidator,
     UpdateProductRequestValidator updateValidator) : ControllerBase
 {
+    [Authorize(Roles = "SalesRep")]
     [HttpPost]
     public async Task<IActionResult> Create(CreateProductRequest request)
     {
@@ -27,7 +32,7 @@ public class ProductsController(
             return BadRequest(validationResult.Errors);
         }
 
-        var result = await productService.CreateAsync(User.GetUserId(), request);
+        var result = await productService.CreateAsync(User.GetEffectiveOwnerId(), request);
         return StatusCode(StatusCodes.Status201Created, result);
     }
 
@@ -39,21 +44,22 @@ public class ProductsController(
     {
         if (skip is null && take is null)
         {
-            var all = await productService.GetAllAsync(User.GetUserId());
+            var all = await productService.GetAllAsync(User.GetEffectiveOwnerId());
             return Ok(all);
         }
 
-        var result = await productService.GetPagedAsync(User.GetUserId(), skip ?? 0, Math.Clamp(take ?? 20, 1, 100));
+        var result = await productService.GetPagedAsync(User.GetEffectiveOwnerId(), skip ?? 0, Math.Clamp(take ?? 20, 1, 100));
         return Ok(result);
     }
 
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById(Guid id)
     {
-        var result = await productService.GetByIdAsync(User.GetUserId(), id);
+        var result = await productService.GetByIdAsync(User.GetEffectiveOwnerId(), id);
         return Ok(result);
     }
 
+    [Authorize(Roles = "SalesRep")]
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, UpdateProductRequest request)
     {
@@ -63,23 +69,25 @@ public class ProductsController(
             return BadRequest(validationResult.Errors);
         }
 
-        var result = await productService.UpdateAsync(User.GetUserId(), id, request);
+        var result = await productService.UpdateAsync(User.GetEffectiveOwnerId(), id, request);
         return Ok(result);
     }
 
+    [Authorize(Roles = "SalesRep")]
     [HttpPost("{id:guid}/image")]
     public async Task<IActionResult> UploadImage(Guid id, IFormFile file)
     {
-        var product = await productService.GetByIdAsync(User.GetUserId(), id);
+        var product = await productService.GetByIdAsync(User.GetEffectiveOwnerId(), id);
         var imageUrl = await fileStorageService.SaveImageAsync(file, "products", product.ImageUrl);
-        var result = await productService.UpdateImageAsync(User.GetUserId(), id, imageUrl);
+        var result = await productService.UpdateImageAsync(User.GetEffectiveOwnerId(), id, imageUrl);
         return Ok(result);
     }
 
+    [Authorize(Roles = "SalesRep")]
     [HttpDelete("{id:guid}/image")]
     public async Task<IActionResult> DeleteImage(Guid id)
     {
-        var userId = User.GetUserId();
+        var userId = User.GetEffectiveOwnerId();
         var product = await productService.GetByIdAsync(userId, id);
         if (!string.IsNullOrWhiteSpace(product.ImageUrl))
         {
@@ -89,31 +97,35 @@ public class ProductsController(
         return Ok(result);
     }
 
+    [Authorize(Roles = "SalesRep")]
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id)
     {
-        await productService.DeleteAsync(User.GetUserId(), id);
+        await productService.DeleteAsync(User.GetEffectiveOwnerId(), id);
         return NoContent();
     }
 
+    [Authorize(Roles = "SalesRep")]
     [HttpGet("archived")]
     public async Task<IActionResult> GetArchived()
     {
-        var result = await productService.GetArchivedAsync(User.GetUserId());
+        var result = await productService.GetArchivedAsync(User.GetEffectiveOwnerId());
         return Ok(result);
     }
 
+    [Authorize(Roles = "SalesRep")]
     [HttpPost("{id:guid}/restore")]
     public async Task<IActionResult> Restore(Guid id)
     {
-        var result = await productService.RestoreAsync(User.GetUserId(), id);
+        var result = await productService.RestoreAsync(User.GetEffectiveOwnerId(), id);
         return Ok(result);
     }
 
+    [Authorize(Roles = "SalesRep")]
     [HttpDelete("{id:guid}/permanent")]
     public async Task<IActionResult> PermanentDelete(Guid id)
     {
-        await productService.PermanentDeleteAsync(User.GetUserId(), id);
+        await productService.PermanentDeleteAsync(User.GetEffectiveOwnerId(), id);
         return NoContent();
     }
 }

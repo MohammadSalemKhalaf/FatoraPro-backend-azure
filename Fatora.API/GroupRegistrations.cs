@@ -5,6 +5,7 @@ using Fatora.API.Validators;
 using Fatora.API.Validators.CustomerValidators;
 using Fatora.API.Validators.OrderValidators;
 using Fatora.API.Validators.ProductValidators;
+using Fatora.API.Validators.RepValidators;
 using Fatora.API.Validators.SyncValidators;
 using Fatora.API.Validators.UserValidators;
 using Fatora.BL.Services.Abstractions;
@@ -27,8 +28,11 @@ public static class GroupRegistrations
         Services.AddScoped<ISyncService, SyncService>();
         Services.AddScoped<IEmailService, EmailService>();
         Services.AddScoped<IAdminRecoveryService, AdminRecoveryService>();
+        Services.AddScoped<IRepService, RepService>();
+        Services.AddScoped<IRepAuthService, RepAuthService>();
 
         Services.AddScoped<LoginRequestValidator>();
+        Services.AddScoped<CreateRepRequestValidator>();
         Services.AddScoped<RefreshTokenValidator>();
         Services.AddScoped<CreateCustomerRequestValidator>();
         Services.AddScoped<UpdateCustomerRequestValidator>();

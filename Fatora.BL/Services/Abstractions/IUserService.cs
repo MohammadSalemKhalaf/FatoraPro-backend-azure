@@ -20,4 +20,5 @@ public interface IUserService
     public Task ChangePasswordAsync(Guid userId, string currentPassword, string newPassword);
     public Task SuspendAsync(Guid userId);
     public Task ActivateAsync(Guid userId);
+    public Task<UserResponse> EnableSalesManagerAsync(Guid userId);
 }

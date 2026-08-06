@@ -9,7 +9,7 @@ namespace Fatora.BL.Services.Classes;
 
 public class SyncService(AppDbContext dbContext) : ISyncService
 {
-    public async Task<SyncPushResponse> PushAsync(Guid userId, SyncPushRequest request)
+    public async Task<SyncPushResponse> PushAsync(Guid userId, SyncPushRequest request, Guid? scopeToRepId = null)
     {
         // Preserve the device's real edit timestamps (possibly recorded hours ago while offline)
         // instead of stamping "now" on arrival - last-write-wins depends on this being accurate.
@@ -19,7 +19,7 @@ public class SyncService(AppDbContext dbContext) : ISyncService
 
         foreach (var item in request.Customers)
         {
-            response.Customers.Add(await PushCustomerAsync(userId, item));
+            response.Customers.Add(await PushCustomerAsync(userId, item, scopeToRepId));
         }
 
         foreach (var item in request.Products)
@@ -31,28 +31,34 @@ public class SyncService(AppDbContext dbContext) : ISyncService
         // processed (and individually saved) after the two loops above complete.
         foreach (var item in request.Orders)
         {
-            response.Orders.Add(await PushOrderAsync(userId, item));
+            response.Orders.Add(await PushOrderAsync(userId, item, scopeToRepId));
         }
 
         foreach (var item in request.Receipts)
         {
-            response.Receipts.Add(await PushReceiptAsync(userId, item));
+            response.Receipts.Add(await PushReceiptAsync(userId, item, scopeToRepId));
         }
 
         foreach (var orderId in request.DeletedOrderIds)
         {
-            response.DeletedOrders.Add(await DeleteOrderAsync(userId, orderId));
+            response.DeletedOrders.Add(await DeleteOrderAsync(userId, orderId, scopeToRepId));
         }
 
         return response;
     }
 
-    public async Task<SyncPullResponse> PullAsync(Guid userId, DateTime since)
+    public async Task<SyncPullResponse> PullAsync(Guid userId, DateTime since, Guid? scopeToRepId = null)
     {
         var serverTime = DateTime.UtcNow;
 
+        // Products are never Rep-scoped in R1 (every Rep sees the full
+        // catalog by default - see Rep.ProductAccessMode) - Customers/
+        // Orders/Receipts are, so a Rep's own device only ever pulls down
+        // its own slice, never another Rep's or the owner's directly-
+        // created records.
         var customers = await dbContext.Customers
-            .Where(c => c.UserId == userId && c.UpdatedAt > since)
+            .Where(c => c.UserId == userId && c.UpdatedAt > since
+                && (scopeToRepId == null || c.CreatedByRepId == scopeToRepId))
             .ToListAsync();
 
         var products = await dbContext.Products
@@ -61,11 +67,13 @@ public class SyncService(AppDbContext dbContext) : ISyncService
 
         var orders = await dbContext.Orders
             .Include(o => o.Customer)
-            .Where(o => o.UserId == userId && o.UpdatedAt > since)
+            .Where(o => o.UserId == userId && o.UpdatedAt > since
+                && (scopeToRepId == null || o.CreatedByRepId == scopeToRepId))
             .ToListAsync();
 
         var receipts = await dbContext.Receipts
-            .Where(r => r.UserId == userId && r.UpdatedAt > since)
+            .Where(r => r.UserId == userId && r.UpdatedAt > since
+                && (scopeToRepId == null || r.CreatedByRepId == scopeToRepId))
             .ToListAsync();
 
         return new SyncPullResponse
@@ -78,11 +86,13 @@ public class SyncService(AppDbContext dbContext) : ISyncService
         };
     }
 
-    private async Task<SyncItemResult> PushCustomerAsync(Guid userId, CustomerSyncItem item)
+    private async Task<SyncItemResult> PushCustomerAsync(Guid userId, CustomerSyncItem item, Guid? scopeToRepId)
     {
         try
         {
-            var existing = await dbContext.Customers.FirstOrDefaultAsync(c => c.Id == item.Id && c.UserId == userId);
+            var existing = await dbContext.Customers.FirstOrDefaultAsync(c =>
+                c.Id == item.Id && c.UserId == userId
+                && (scopeToRepId == null || c.CreatedByRepId == scopeToRepId));
 
             if (existing is null)
             {
@@ -96,6 +106,7 @@ public class SyncService(AppDbContext dbContext) : ISyncService
                     City = item.City,
                     IsActive = item.IsActive,
                     UserId = userId,
+                    CreatedByRepId = scopeToRepId,
                     CreatedAt = item.UpdatedAt,
                     UpdatedAt = item.UpdatedAt
                 });
@@ -178,15 +189,19 @@ public class SyncService(AppDbContext dbContext) : ISyncService
         }
     }
 
-    private async Task<SyncItemResult> PushOrderAsync(Guid userId, OrderSyncItem item)
+    private async Task<SyncItemResult> PushOrderAsync(Guid userId, OrderSyncItem item, Guid? scopeToRepId)
     {
         try
         {
-            var existing = await dbContext.Orders.Include(o => o.Customer).FirstOrDefaultAsync(o => o.Id == item.Id && o.UserId == userId);
+            var existing = await dbContext.Orders.Include(o => o.Customer).FirstOrDefaultAsync(o =>
+                o.Id == item.Id && o.UserId == userId
+                && (scopeToRepId == null || o.CreatedByRepId == scopeToRepId));
 
             if (existing is null)
             {
-                var customer = await dbContext.Customers.FirstOrDefaultAsync(c => c.Id == item.CustomerId && c.UserId == userId);
+                var customer = await dbContext.Customers.FirstOrDefaultAsync(c =>
+                    c.Id == item.CustomerId && c.UserId == userId
+                    && (scopeToRepId == null || c.CreatedByRepId == scopeToRepId));
 
                 if (customer is null)
                 {
@@ -206,6 +221,7 @@ public class SyncService(AppDbContext dbContext) : ISyncService
                     InvoiceNumber = await GenerateInvoiceNumberAsync(userId),
                     CustomerId = customer.Id,
                     UserId = userId,
+                    CreatedByRepId = scopeToRepId,
                     DueDate = item.DueDate,
                     Discount = item.Discount,
                     Notes = item.Notes,
@@ -248,7 +264,9 @@ public class SyncService(AppDbContext dbContext) : ISyncService
                 return new SyncItemResult(item.Id, "Rejected", "Cannot edit an invoice that has already been paid in full.");
             }
 
-            var newCustomer = await dbContext.Customers.FirstOrDefaultAsync(c => c.Id == item.CustomerId && c.UserId == userId);
+            var newCustomer = await dbContext.Customers.FirstOrDefaultAsync(c =>
+                c.Id == item.CustomerId && c.UserId == userId
+                && (scopeToRepId == null || c.CreatedByRepId == scopeToRepId));
 
             if (newCustomer is null)
             {
@@ -337,15 +355,19 @@ public class SyncService(AppDbContext dbContext) : ISyncService
     // Mirrors PushCustomerAsync: no dedicated REST endpoint exists for
     // receipts, they're created/updated/soft-deleted (IsActive = false)
     // purely through this sync path, same as customers.
-    private async Task<SyncItemResult> PushReceiptAsync(Guid userId, ReceiptSyncItem item)
+    private async Task<SyncItemResult> PushReceiptAsync(Guid userId, ReceiptSyncItem item, Guid? scopeToRepId)
     {
         try
         {
-            var existing = await dbContext.Receipts.FirstOrDefaultAsync(r => r.Id == item.Id && r.UserId == userId);
+            var existing = await dbContext.Receipts.FirstOrDefaultAsync(r =>
+                r.Id == item.Id && r.UserId == userId
+                && (scopeToRepId == null || r.CreatedByRepId == scopeToRepId));
 
             if (existing is null)
             {
-                var customer = await dbContext.Customers.FirstOrDefaultAsync(c => c.Id == item.CustomerId && c.UserId == userId);
+                var customer = await dbContext.Customers.FirstOrDefaultAsync(c =>
+                    c.Id == item.CustomerId && c.UserId == userId
+                    && (scopeToRepId == null || c.CreatedByRepId == scopeToRepId));
 
                 if (customer is null)
                 {
@@ -359,6 +381,7 @@ public class SyncService(AppDbContext dbContext) : ISyncService
                     Amount = item.Amount,
                     IsActive = item.IsActive,
                     UserId = userId,
+                    CreatedByRepId = scopeToRepId,
                     CreatedAt = item.UpdatedAt,
                     UpdatedAt = item.UpdatedAt
                 });
@@ -385,11 +408,13 @@ public class SyncService(AppDbContext dbContext) : ISyncService
         }
     }
 
-    private async Task<SyncItemResult> DeleteOrderAsync(Guid userId, Guid orderId)
+    private async Task<SyncItemResult> DeleteOrderAsync(Guid userId, Guid orderId, Guid? scopeToRepId)
     {
         try
         {
-            var order = await dbContext.Orders.FirstOrDefaultAsync(o => o.Id == orderId && o.UserId == userId);
+            var order = await dbContext.Orders.FirstOrDefaultAsync(o =>
+                o.Id == orderId && o.UserId == userId
+                && (scopeToRepId == null || o.CreatedByRepId == scopeToRepId));
 
             if (order is not null)
             {

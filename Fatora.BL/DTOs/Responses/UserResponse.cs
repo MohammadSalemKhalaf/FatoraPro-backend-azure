@@ -12,6 +12,7 @@ public class UserResponse
     public string? Street { get; set; }
     public string Role { get; set; } = string.Empty;
     public bool IsActive { get; set; }
+    public bool IsSalesManager { get; set; }
     public string? BankName { get; set; }
     public string? AccountNumber { get; set; }
     public string? IBAN { get; set; }

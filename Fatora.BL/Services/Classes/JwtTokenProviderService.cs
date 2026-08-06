@@ -16,7 +16,10 @@ using Fatora.BL.Exceptions;
 
 namespace Fatora.BL.Services.Classes;
 
-public class JwtTokenProviderService(IConfiguration configuration, AppDbContext dbContext) : IJwtTokenProviderService
+public class JwtTokenProviderService(
+    IConfiguration configuration,
+    AppDbContext dbContext,
+    IRepAuthService repAuthService) : IJwtTokenProviderService
 {
     public async Task<JwtTokenResponse> GenerateToken(User user)
     {
@@ -64,6 +67,20 @@ public class JwtTokenProviderService(IConfiguration configuration, AppDbContext 
         var storedToken = await dbContext.RefreshTokens
             .Include(r => r.User)
             .FirstOrDefaultAsync(r => r.Token == hashedToken);
+
+        // A Rep session's raw refresh token never matches a RefreshTokens
+        // row (separate table - see RepRefreshToken.cs), so this is how a
+        // Rep and a normal User both refresh through the same
+        // POST /account/refresh-token endpoint without the frontend having
+        // to know or care which kind of session it's holding.
+        if (storedToken is null)
+        {
+            var repResult = await repAuthService.TryRefreshAsync(refreshToken);
+            if (repResult is not null)
+            {
+                return repResult;
+            }
+        }
 
         if (storedToken is null || storedToken.ExpiresOnUtc < DateTime.UtcNow)
         {

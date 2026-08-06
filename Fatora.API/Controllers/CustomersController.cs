@@ -10,7 +10,7 @@ namespace Fatora.API.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-[Authorize(Roles = "SalesRep")]
+[Authorize(Roles = "SalesRep,Rep")]
 public class CustomersController(
     ICustomerService customerService,
     CreateCustomerRequestValidator createValidator,
@@ -25,21 +25,23 @@ public class CustomersController(
             return BadRequest(validationResult.Errors);
         }
 
-        var result = await customerService.CreateAsync(User.GetUserId(), request);
+        var result = await customerService.CreateAsync(User.GetEffectiveOwnerId(), request, User.GetRepIdOrNull());
         return StatusCode(StatusCodes.Status201Created, result);
     }
 
+    // repId lets the owner narrow the list to one rep's own customers - a
+    // Rep session ignores it and is always scoped to its own id regardless.
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll([FromQuery] Guid? repId)
     {
-        var result = await customerService.GetAllAsync(User.GetUserId());
+        var result = await customerService.GetAllAsync(User.GetEffectiveOwnerId(), User.GetRepIdOrNull() ?? repId);
         return Ok(result);
     }
 
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById(Guid id)
     {
-        var result = await customerService.GetByIdAsync(User.GetUserId(), id);
+        var result = await customerService.GetByIdAsync(User.GetEffectiveOwnerId(), id, User.GetRepIdOrNull());
         return Ok(result);
     }
 
@@ -52,35 +54,35 @@ public class CustomersController(
             return BadRequest(validationResult.Errors);
         }
 
-        var result = await customerService.UpdateAsync(User.GetUserId(), id, request);
+        var result = await customerService.UpdateAsync(User.GetEffectiveOwnerId(), id, request, User.GetRepIdOrNull());
         return Ok(result);
     }
 
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id)
     {
-        await customerService.DeleteAsync(User.GetUserId(), id);
+        await customerService.DeleteAsync(User.GetEffectiveOwnerId(), id, User.GetRepIdOrNull());
         return NoContent();
     }
 
     [HttpGet("archived")]
     public async Task<IActionResult> GetArchived()
     {
-        var result = await customerService.GetArchivedAsync(User.GetUserId());
+        var result = await customerService.GetArchivedAsync(User.GetEffectiveOwnerId(), User.GetRepIdOrNull());
         return Ok(result);
     }
 
     [HttpPost("{id:guid}/restore")]
     public async Task<IActionResult> Restore(Guid id)
     {
-        var result = await customerService.RestoreAsync(User.GetUserId(), id);
+        var result = await customerService.RestoreAsync(User.GetEffectiveOwnerId(), id, User.GetRepIdOrNull());
         return Ok(result);
     }
 
     [HttpDelete("{id:guid}/permanent")]
     public async Task<IActionResult> PermanentDelete(Guid id)
     {
-        await customerService.PermanentDeleteAsync(User.GetUserId(), id);
+        await customerService.PermanentDeleteAsync(User.GetEffectiveOwnerId(), id, User.GetRepIdOrNull());
         return NoContent();
     }
 }
