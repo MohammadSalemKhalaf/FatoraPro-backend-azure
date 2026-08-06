@@ -14,8 +14,6 @@ public interface IRepAuthService
     // session they're refreshing.
     Task<JwtTokenResponse?> TryRefreshAsync(string refreshToken);
 
-    Task RevokeSessionAsync(Guid repId);
-
     // A narrowly-scoped, short-lived token (Role=RepPendingSync) handed
     // alongside a REP_SESSION_ENDED rejection - see AccountStatusFilter and
     // TryRefreshAsync - so a device that had unsynced offline work when it

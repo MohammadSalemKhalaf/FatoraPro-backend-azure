@@ -14,10 +14,11 @@ namespace Fatora.BL.Services.Classes;
 // GetMyInfoAsync, which a Rep session calls about itself (to know its own
 // current ProductAccessMode - e.g. whether to offer "create my own
 // product"), needs no owner-ownership check since the caller already IS the
-// rep in question. Session issuing/refresh/revocation lives in
-// IRepAuthService instead, mirroring how LoginService/JwtTokenProviderService
-// are split for normal Users.
-public class RepService(AppDbContext dbContext, IRepAuthService repAuthService) : IRepService
+// rep in question. Session issuing/refresh lives in IRepAuthService instead,
+// mirroring how LoginService/JwtTokenProviderService are split for normal
+// Users - this class only ever changes SessionVersion/IsActive, never talks
+// to IRepAuthService directly.
+public class RepService(AppDbContext dbContext) : IRepService
 {
     public async Task<RepResponse> CreateAsync(Guid ownerUserId, CreateRepRequest request)
     {
@@ -71,14 +72,20 @@ public class RepService(AppDbContext dbContext, IRepAuthService repAuthService) 
         var rep = await FindOwnedRep(ownerUserId, repId);
 
         // SessionVersion++ is what actually force-ends an already-issued
-        // access token mid-session (see AccountStatusFilter) - revoking the
-        // refresh token alone only blocks the *next* renewal, and that
-        // device's current token would otherwise keep working until it
-        // naturally expires.
+        // access token mid-session (see AccountStatusFilter), and - since
+        // RepRefreshToken now snapshots the SessionVersion it was issued
+        // under (see RepAuthService.IssueRefreshTokenAsync) - it's also
+        // enough on its own to reject the next refresh attempt with the
+        // dedicated REP_SESSION_ENDED code (see TryRefreshAsync). Explicitly
+        // NOT deleting the refresh-token row here (unlike an earlier version
+        // of this method): doing so destroyed the one thing that rejection
+        // needed to still find, so a device whose access token had already
+        // expired by the time it reconnected got a generic, code-less
+        // rejection instead - silently kicked out with no explanation,
+        // exactly the popup this whole mechanism exists to prevent. Mirrors
+        // DeactivateAsync's identical reasoning below.
         rep.SessionVersion++;
         await dbContext.SaveChangesAsync();
-
-        await repAuthService.RevokeSessionAsync(rep.Id);
     }
 
     public async Task DeactivateAsync(Guid ownerUserId, Guid repId)
@@ -89,17 +96,11 @@ public class RepService(AppDbContext dbContext, IRepAuthService repAuthService) 
         rep.SessionVersion++;
         await dbContext.SaveChangesAsync();
 
-        // Deliberately does NOT also call RevokeSessionAsync here (unlike
-        // LogoutAsync) - IsActive=false already blocks both a future
-        // login-by-qr and, on its own, a refresh attempt (see
-        // RepAuthService.TryRefreshAsync's !storedToken.Rep.IsActive check).
-        // Deleting the refresh-token row on top of that would only destroy
-        // the one thing that check needs to still find: without the row,
-        // TryRefreshAsync can't tell "this rep was deactivated" apart from
-        // "this token never existed", and the device refreshing gets a
-        // generic, code-less rejection instead of the dedicated
-        // REP_SESSION_ENDED one - silently kicked out with no explanation,
-        // exactly the popup this whole mechanism exists to prevent.
+        // Deliberately does NOT delete the refresh-token row - IsActive=false
+        // already blocks a future login-by-qr, and the row surviving is what
+        // lets TryRefreshAsync tell "this rep was deactivated" apart from
+        // "this token never existed" and return the dedicated,
+        // REP_SESSION_ENDED-coded rejection instead of a generic one.
     }
 
     public async Task<RepResponse> ReactivateAsync(Guid ownerUserId, Guid repId)

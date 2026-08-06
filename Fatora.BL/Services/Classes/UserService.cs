@@ -177,6 +177,8 @@ public class UserService(AppDbContext dbContext, IPasswordHasherService password
         user.Name = request.Name;
         user.PhoneNumber = request.PhoneNumber;
         user.BusinessName = request.BusinessName;
+        user.Street = request.Street;
+        user.City = request.City;
 
         await dbContext.SaveChangesAsync();
 

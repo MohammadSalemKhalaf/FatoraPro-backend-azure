@@ -12,4 +12,12 @@ public class RepRefreshToken
     public DateTime ExpiresOnUtc { get; set; }
     public Guid RepId { get; set; }
     public Rep Rep { get; set; }
+
+    // Snapshot of Rep.SessionVersion at the moment this token was issued -
+    // lets RepAuthService.TryRefreshAsync tell "this token belongs to a
+    // session the owner has since ended (logout or deactivate)" apart from
+    // "this token is still current", without needing to delete the row the
+    // instant a session ends. See RepService.LogoutAsync for why the row is
+    // deliberately no longer deleted on logout.
+    public int IssuedAtSessionVersion { get; set; }
 }

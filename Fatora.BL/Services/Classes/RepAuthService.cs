@@ -60,14 +60,20 @@ public class RepAuthService(IConfiguration configuration, AppDbContext dbContext
         }
 
         // Distinct from a plain expiry: this token is still technically
-        // live, but the owner deactivated the rep since it was issued - the
-        // dedicated code lets the frontend show "your session ended, re-scan
-        // your QR" instead of a silent, unexplained logout (see
-        // AccountStatusFilter for the equivalent mid-session check, which
-        // only fires while the *access* token is still valid - this branch
-        // is what catches the case where it had already expired by the
-        // time the device reconnects and tries to refresh).
-        if (!storedToken.Rep.IsActive)
+        // live, but the owner ended this session (logout or deactivate)
+        // since it was issued - the dedicated code lets the frontend show
+        // "your session ended, re-scan your QR" instead of a silent,
+        // unexplained logout (see AccountStatusFilter for the equivalent
+        // mid-session check, which only fires while the *access* token is
+        // still valid - this branch is what catches the case where it had
+        // already expired by the time the device reconnects and tries to
+        // refresh). IsActive alone isn't enough here: a plain logout never
+        // sets it false, only bumps SessionVersion - checking both is what
+        // makes this fire for logout exactly the same way it already did
+        // for deactivate, instead of falling through to a generic,
+        // uncoded rejection with no "rescan your QR" messaging.
+        if (!storedToken.Rep.IsActive ||
+            storedToken.IssuedAtSessionVersion != storedToken.Rep.SessionVersion)
         {
             // Carried alongside the rejection, not instead of it - the
             // device still needs to land on "your session ended" either
@@ -89,13 +95,6 @@ public class RepAuthService(IConfiguration configuration, AppDbContext dbContext
         }
 
         return await GenerateTokenAsync(storedToken.Rep);
-    }
-
-    public async Task RevokeSessionAsync(Guid repId)
-    {
-        var tokens = await dbContext.RepRefreshTokens.Where(r => r.RepId == repId).ToListAsync();
-        dbContext.RepRefreshTokens.RemoveRange(tokens);
-        await dbContext.SaveChangesAsync();
     }
 
     public string GeneratePendingSyncToken(Rep rep)
@@ -171,7 +170,8 @@ public class RepAuthService(IConfiguration configuration, AppDbContext dbContext
         {
             Token = HashToken(rawToken),
             RepId = rep.Id,
-            ExpiresOnUtc = DateTime.UtcNow.AddDays(7)
+            ExpiresOnUtc = DateTime.UtcNow.AddDays(7),
+            IssuedAtSessionVersion = rep.SessionVersion
         };
 
         await dbContext.RepRefreshTokens.AddAsync(refreshToken);
