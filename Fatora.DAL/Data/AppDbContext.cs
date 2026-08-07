@@ -26,6 +26,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<AnnualInventoryArchive> AnnualInventoryArchives { get; set; }
     public DbSet<SubAdmin> SubAdmins { get; set; }
     public DbSet<SubAdminRefreshToken> SubAdminRefreshTokens { get; set; }
+    public DbSet<SupportContact> SupportContacts { get; set; }
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

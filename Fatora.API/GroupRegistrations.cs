@@ -7,6 +7,7 @@ using Fatora.API.Validators.OrderValidators;
 using Fatora.API.Validators.ProductValidators;
 using Fatora.API.Validators.RepValidators;
 using Fatora.API.Validators.SubAdminValidators;
+using Fatora.API.Validators.SupportContactValidators;
 using Fatora.API.Validators.SyncValidators;
 using Fatora.API.Validators.UserValidators;
 using Fatora.BL.Services.Abstractions;
@@ -35,10 +36,13 @@ public static class GroupRegistrations
         Services.AddScoped<IAnnualInventoryService, AnnualInventoryService>();
         Services.AddScoped<ISubAdminService, SubAdminService>();
         Services.AddScoped<ISubAdminAuthService, SubAdminAuthService>();
+        Services.AddScoped<ISupportContactService, SupportContactService>();
 
         Services.AddScoped<LoginRequestValidator>();
         Services.AddScoped<CreateRepRequestValidator>();
         Services.AddScoped<CreateSubAdminRequestValidator>();
+        Services.AddScoped<CreateSupportContactRequestValidator>();
+        Services.AddScoped<UpdateSupportContactRequestValidator>();
         Services.AddScoped<RefreshTokenValidator>();
         Services.AddScoped<CreateCustomerRequestValidator>();
         Services.AddScoped<UpdateCustomerRequestValidator>();
