@@ -1,0 +1,261 @@
+using Fatora.BL.DTOs.Requests;
+using Fatora.BL.DTOs.Responses;
+using Fatora.BL.Exceptions;
+using Fatora.BL.Services.Abstractions;
+using Fatora.DAL.Data;
+using Fatora.DAL.Entites;
+using Microsoft.EntityFrameworkCore;
+using System.Text;
+
+namespace Fatora.BL.Services.Classes;
+
+// A one-way, owner-only "close the books and start fresh" action - unlike
+// OrderService.DeleteAsync (a soft, purely operational hide), this genuinely
+// removes the selected data after archiving it, so the two exported files
+// become the only remaining record. See Order.IsDeleted's comment for the
+// contrast.
+public class AnnualInventoryService(AppDbContext dbContext, IPasswordHasherService passwordHasher)
+    : IAnnualInventoryService
+{
+    public async Task<RunAnnualInventoryResponse> RunAsync(Guid userId, RunAnnualInventoryRequest request)
+    {
+        var user = await dbContext.Users.FirstAsync(u => u.Id == userId);
+
+        if (!passwordHasher.Verify(user, request.Password, user.Password))
+        {
+            throw new UnauthorizedException("Incorrect password.");
+        }
+
+        if (!request.IncludeCustomers && !request.IncludeItems && !request.IncludeInvoices)
+        {
+            throw new BadRequestException("Select at least one category to include.");
+        }
+
+        // Customers and Items both force Invoices along with them - a
+        // deleted customer can't leave dangling invoices, and neither can a
+        // deleted product leave dangling invoice lines. The archive below
+        // reflects what was actually wiped, not just what was checked.
+        var includeInvoices = request.IncludeInvoices || request.IncludeCustomers || request.IncludeItems;
+
+        var orders = await dbContext.Orders
+            .Include(o => o.Customer)
+            .Where(o => o.UserId == userId)
+            .ToListAsync();
+
+        var totalSales = orders.Where(o => !o.IsReturned).Sum(o => o.Total);
+        var totalCollected = orders.Sum(o => o.PaidAmount);
+        var totalRemainingDebt = orders.Sum(o => o.RemainingBalance);
+
+        var customers = request.IncludeCustomers
+            ? await dbContext.Customers.Where(c => c.UserId == userId).ToListAsync()
+            : [];
+        var products = request.IncludeItems
+            ? await dbContext.Products.Where(p => p.UserId == userId).ToListAsync()
+            : [];
+
+        var csvContent = BuildCsv(
+            includeInvoices, request.IncludeCustomers, request.IncludeItems,
+            totalSales, totalCollected, totalRemainingDebt, orders, customers, products);
+
+        // Deletion order matters: Orders (and their OrderItems, cascaded)
+        // always go first whenever Invoices is effectively included, so
+        // Products can never be removed while an OrderItem elsewhere might
+        // still reference them - Product -> OrderItem is itself a cascade
+        // delete, and removing a Product while unrelated live orders still
+        // used it would silently corrupt their line items too.
+        if (includeInvoices)
+        {
+            dbContext.Orders.RemoveRange(orders);
+        }
+
+        if (request.IncludeCustomers)
+        {
+            // Cascades each customer's Receipts - Orders are already gone
+            // above whenever this branch can run (Customers always forces
+            // Invoices).
+            dbContext.Customers.RemoveRange(customers);
+        }
+
+        if (request.IncludeItems)
+        {
+            dbContext.Products.RemoveRange(products);
+        }
+
+        var archive = new AnnualInventoryArchive
+        {
+            UserId = userId,
+            Year = DateTime.UtcNow.Year,
+            TotalSales = totalSales,
+            TotalCollected = totalCollected,
+            TotalRemainingDebt = totalRemainingDebt,
+            CsvContent = csvContent,
+            CreatedAt = DateTime.UtcNow
+        };
+        dbContext.AnnualInventoryArchives.Add(archive);
+
+        // One SaveChanges - the wipe and the archive that records it commit
+        // together, so there's never a moment where data was removed
+        // without the archive that's supposed to be its replacement.
+        await dbContext.SaveChangesAsync();
+
+        return new RunAnnualInventoryResponse
+        {
+            Id = archive.Id,
+            Year = archive.Year,
+            TotalSales = archive.TotalSales,
+            TotalCollected = archive.TotalCollected,
+            TotalRemainingDebt = archive.TotalRemainingDebt,
+            HasPdf = false,
+            CreatedAt = archive.CreatedAt,
+            CsvContent = archive.CsvContent
+        };
+    }
+
+    public async Task<AnnualInventoryArchiveResponse> AttachPdfAsync(Guid userId, Guid archiveId, byte[] pdfBytes)
+    {
+        var archive = await FindOwnedArchive(userId, archiveId);
+        archive.PdfContent = pdfBytes;
+        await dbContext.SaveChangesAsync();
+        return ToResponse(archive);
+    }
+
+    public async Task<List<AnnualInventoryArchiveResponse>> GetAllAsync(Guid userId)
+    {
+        var archives = await dbContext.AnnualInventoryArchives
+            .Where(a => a.UserId == userId)
+            .OrderByDescending(a => a.CreatedAt)
+            .ToListAsync();
+
+        return archives.Select(ToResponse).ToList();
+    }
+
+    public async Task<(string CsvContent, int Year)> GetCsvAsync(Guid userId, Guid archiveId)
+    {
+        var archive = await FindOwnedArchive(userId, archiveId);
+        return (archive.CsvContent, archive.Year);
+    }
+
+    public async Task<(byte[] PdfContent, int Year)> GetPdfAsync(Guid userId, Guid archiveId)
+    {
+        var archive = await FindOwnedArchive(userId, archiveId);
+        if (archive.PdfContent is null)
+        {
+            throw new NotFoundException(nameof(AnnualInventoryArchive.PdfContent), archiveId);
+        }
+        return (archive.PdfContent, archive.Year);
+    }
+
+    private async Task<AnnualInventoryArchive> FindOwnedArchive(Guid userId, Guid archiveId)
+    {
+        var archive = await dbContext.AnnualInventoryArchives
+            .FirstOrDefaultAsync(a => a.Id == archiveId && a.UserId == userId);
+
+        if (archive is null)
+        {
+            throw new NotFoundException(nameof(AnnualInventoryArchive), archiveId);
+        }
+
+        return archive;
+    }
+
+    private static AnnualInventoryArchiveResponse ToResponse(AnnualInventoryArchive archive) => new()
+    {
+        Id = archive.Id,
+        Year = archive.Year,
+        TotalSales = archive.TotalSales,
+        TotalCollected = archive.TotalCollected,
+        TotalRemainingDebt = archive.TotalRemainingDebt,
+        HasPdf = archive.PdfContent is not null,
+        CreatedAt = archive.CreatedAt
+    };
+
+    // Mirrors the frontend's DataExportService.buildCsv exactly (same
+    // quoting/row convention, same section headers) so a downloaded annual
+    // archive reads consistently with the app's regular CSV export - a
+    // summary section up top for a quick glance, full detail below for
+    // whichever categories this run actually wiped.
+    private static string BuildCsv(
+        bool includeInvoices, bool includeCustomers, bool includeItems,
+        decimal totalSales, decimal totalCollected, decimal totalRemainingDebt,
+        List<Order> orders, List<Customer> customers, List<Product> products)
+    {
+        var sb = new StringBuilder();
+
+        AppendRow(sb, "ملخص الجرد السنوي");
+        AppendRow(sb, "إجمالي المبيعات", "إجمالي المقبوض", "إجمالي الدين المتبقي");
+        AppendRow(sb, totalSales.ToString("F2"), totalCollected.ToString("F2"), totalRemainingDebt.ToString("F2"));
+        sb.Append("\r\n");
+
+        if (includeInvoices)
+        {
+            var returned = orders.Where(o => o.IsReturned).ToList();
+            var active = orders.Where(o => !o.IsReturned).ToList();
+
+            if (returned.Count > 0)
+            {
+                AppendRow(sb, "الفواتير المرتجعة");
+                AppendRow(sb, "رقم الفاتورة", "العميل", "رقم الهاتف", "تاريخ الإصدار", "القيمة الأصلية");
+                decimal returnedTotal = 0;
+                foreach (var order in returned)
+                {
+                    returnedTotal += order.Total;
+                    AppendRow(sb, order.InvoiceNumber, order.Customer.Name, order.Customer.PhoneNumber ?? "",
+                        order.CreatedAt.ToString("yyyy-MM-dd"), order.Total.ToString("F2"));
+                }
+                AppendRow(sb, "الإجمالي العام", "", "", "", returnedTotal.ToString("F2"));
+                sb.Append("\r\n");
+            }
+
+            AppendRow(sb, "الفواتير");
+            AppendRow(sb, "رقم الفاتورة", "العميل", "رقم الهاتف", "تاريخ الإصدار", "تاريخ الاستحقاق",
+                "الخصم", "الإجمالي", "المدفوع", "المتبقي");
+            decimal discountTotal = 0, amountTotal = 0, paidTotal = 0, remainingTotal = 0;
+            foreach (var order in active)
+            {
+                discountTotal += order.Discount;
+                amountTotal += order.Total;
+                paidTotal += order.PaidAmount;
+                remainingTotal += order.RemainingBalance;
+                AppendRow(sb, order.InvoiceNumber, order.Customer.Name, order.Customer.PhoneNumber ?? "",
+                    order.CreatedAt.ToString("yyyy-MM-dd"),
+                    order.DueDate?.ToString("yyyy-MM-dd") ?? "",
+                    order.Discount.ToString("F2"), order.Total.ToString("F2"),
+                    order.PaidAmount.ToString("F2"), order.RemainingBalance.ToString("F2"));
+            }
+            AppendRow(sb, "الإجمالي العام", "", "", "", "", discountTotal.ToString("F2"),
+                amountTotal.ToString("F2"), paidTotal.ToString("F2"), remainingTotal.ToString("F2"));
+            sb.Append("\r\n");
+        }
+
+        if (includeCustomers)
+        {
+            AppendRow(sb, "العملاء");
+            AppendRow(sb, "الاسم", "اسم المتجر", "رقم الهاتف", "الشارع", "المدينة", "تاريخ الإضافة");
+            foreach (var customer in customers)
+            {
+                AppendRow(sb, customer.Name, customer.StoreName ?? "", customer.PhoneNumber ?? "",
+                    customer.Street ?? "", customer.City ?? "", customer.CreatedAt.ToString("yyyy-MM-dd"));
+            }
+            sb.Append("\r\n");
+        }
+
+        if (includeItems)
+        {
+            AppendRow(sb, "الأصناف");
+            AppendRow(sb, "الاسم", "الوصف", "سعر الشراء", "سعر البيع");
+            foreach (var product in products)
+            {
+                AppendRow(sb, product.Name, product.Description ?? "",
+                    product.PurchasePrice.ToString("F2"), product.SellPrice.ToString("F2"));
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    private static void AppendRow(StringBuilder sb, params string[] fields)
+    {
+        sb.Append(string.Join(",", fields.Select(f => $"\"{f.Replace("\"", "\"\"")}\"")));
+        sb.Append("\r\n");
+    }
+}

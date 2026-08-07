@@ -31,6 +31,7 @@ public static class GroupRegistrations
         Services.AddScoped<IRepService, RepService>();
         Services.AddScoped<IRepAuthService, RepAuthService>();
         Services.AddScoped<IPendingRepSyncService, PendingRepSyncService>();
+        Services.AddScoped<IAnnualInventoryService, AnnualInventoryService>();
 
         Services.AddScoped<LoginRequestValidator>();
         Services.AddScoped<CreateRepRequestValidator>();
