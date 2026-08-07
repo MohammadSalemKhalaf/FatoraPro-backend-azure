@@ -15,8 +15,6 @@ public class SyncPushRequestValidator : AbstractValidator<SyncPushRequest>
         RuleFor(x => x).Must(HaveAReasonableBatchSize)
             .WithMessage($"A single sync batch cannot exceed {MaxItemsPerBatch} total items. Split into multiple pushes.");
 
-        RuleForEach(x => x.DeletedOrderIds).NotEqual(Guid.Empty);
-
         RuleForEach(x => x.Customers).ChildRules(customer =>
         {
             customer.RuleFor(c => c.Id).NotEqual(Guid.Empty);
@@ -62,8 +60,7 @@ public class SyncPushRequestValidator : AbstractValidator<SyncPushRequest>
             + request.Products.Count
             + request.Orders.Count
             + request.Orders.Sum(o => o.Items.Count)
-            + request.Receipts.Count
-            + request.DeletedOrderIds.Count;
+            + request.Receipts.Count;
 
         return total <= MaxItemsPerBatch;
     }

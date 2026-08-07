@@ -206,7 +206,7 @@ Quick map of controllers — see `Fatora.API.http` for the full request list.
 
 **Invoice numbers are always assigned server-side**, at the moment an order is pushed — never by the device.
 
-**Orders deleted offline** are sent via `DeletedOrderIds` in the push payload and hard-deleted server-side. There is no delete-tombstone in the pull response — this would need revisiting if multi-device-per-rep is ever supported.
+**Orders deleted offline** are soft-deleted: `Order.IsDeleted` is pushed as a normal field on the order item, exactly like `IsReturned`. It only hides the invoice from the Invoices list — it never restores stock or excludes the order from reports, the customer statement, or CSV exports, and it's owner-only.
 
 ---
 

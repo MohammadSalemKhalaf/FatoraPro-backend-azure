@@ -6,8 +6,7 @@ public sealed record SyncPushRequest(
     List<CustomerSyncItem> Customers,
     List<ProductSyncItem> Products,
     List<OrderSyncItem> Orders,
-    List<ReceiptSyncItem> Receipts,
-    List<Guid> DeletedOrderIds
+    List<ReceiptSyncItem> Receipts
 );
 
 public sealed record CustomerSyncItem(
@@ -45,7 +44,8 @@ public sealed record OrderSyncItem(
     [Required, MinLength(1)] List<OrderItemSyncItem> Items,
     [Range(0, double.MaxValue)] decimal CashDiscount = 0m,
     bool CoveredByReceipt = false,
-    bool IsReturned = false
+    bool IsReturned = false,
+    bool IsDeleted = false
 );
 
 public sealed record OrderItemSyncItem(

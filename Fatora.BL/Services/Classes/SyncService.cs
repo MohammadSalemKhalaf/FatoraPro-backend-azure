@@ -39,11 +39,6 @@ public class SyncService(AppDbContext dbContext) : ISyncService
             response.Receipts.Add(await PushReceiptAsync(userId, item, scopeToRepId));
         }
 
-        foreach (var orderId in request.DeletedOrderIds)
-        {
-            response.DeletedOrders.Add(await DeleteOrderAsync(userId, orderId, scopeToRepId));
-        }
-
         return response;
     }
 
@@ -224,6 +219,12 @@ public class SyncService(AppDbContext dbContext) : ISyncService
                     PaidAmount = item.PaidAmount,
                     CoveredByReceipt = item.CoveredByReceipt,
                     IsReturned = item.IsReturned,
+                    // Only reachable if this order was created and then
+                    // deleted offline before its very first sync - a Rep
+                    // can't reach this either way (delete is owner-only, see
+                    // the dedicated IsDeleted branch below for the normal
+                    // case where the order already exists server-side).
+                    IsDeleted = scopeToRepId is null && item.IsDeleted,
                     CreatedAt = item.UpdatedAt,
                     UpdatedAt = item.UpdatedAt,
                     OrderItems = item.Items.Select(i => new OrderItem
@@ -251,6 +252,28 @@ public class SyncService(AppDbContext dbContext) : ISyncService
             if (item.UpdatedAt <= existing.UpdatedAt)
             {
                 return new SyncItemResult(item.Id, "Conflict", "Server has a newer or equal version; pull to reconcile.");
+            }
+
+            // A push that only just marked this deleted (see
+            // OrdersRepository.delete) is handled before every other gate
+            // below, including the "already returned" rejection right after
+            // this block - deleting an already-returned invoice is in fact
+            // the normal case (see OrderService.DeleteAsync), and deleting a
+            // non-returned one is still allowed at the owner's own
+            // discretion. No stock/customer/item reconciliation, no status
+            // change, just the flag itself - see Order.IsDeleted for why it
+            // deliberately has no other effect.
+            if (item.IsDeleted && !existing.IsDeleted)
+            {
+                if (scopeToRepId is not null)
+                {
+                    return new SyncItemResult(item.Id, "Rejected", "Only the account owner can delete an invoice.");
+                }
+
+                existing.IsDeleted = true;
+                existing.UpdatedAt = item.UpdatedAt;
+                await dbContext.SaveChangesAsync();
+                return new SyncItemResult(item.Id, "Applied");
             }
 
             // A push that only just marked this returned (see
@@ -425,51 +448,6 @@ public class SyncService(AppDbContext dbContext) : ISyncService
         catch (Exception ex)
         {
             return new SyncItemResult(item.Id, "Rejected", ex.Message);
-        }
-    }
-
-    private async Task<SyncItemResult> DeleteOrderAsync(Guid userId, Guid orderId, Guid? scopeToRepId)
-    {
-        try
-        {
-            // A Rep can never hard-delete via sync push either - same
-            // owner-only restriction as the REST DELETE endpoint (see
-            // OrdersController.Delete), enforced here so it can't be routed
-            // around through the offline sync path instead. scopeToRepId is
-            // only ever non-null for an actual Rep session (SyncController
-            // never merges in an owner-supplied ?repId= for pushes).
-            if (scopeToRepId is not null)
-            {
-                return new SyncItemResult(orderId, "Rejected", "Only the account owner can delete an invoice.");
-            }
-
-            var order = await dbContext.Orders.FirstOrDefaultAsync(o =>
-                o.Id == orderId && o.UserId == userId
-                && (scopeToRepId == null || o.CreatedByRepId == scopeToRepId));
-
-            if (order is not null)
-            {
-                // Skip if already returned - PushOrderAsync's return
-                // handling already restored this stock once; doing it
-                // again here would double-count it.
-                if (!order.IsReturned)
-                {
-                    // OrderItems (and their Product) are auto-included - see
-                    // OrderConfiguration/ItemConfiguration.
-                    foreach (var lineItem in order.OrderItems)
-                    {
-                        AdjustStock(lineItem.Product, lineItem.Quantity);
-                    }
-                }
-                dbContext.Orders.Remove(order);
-                await dbContext.SaveChangesAsync();
-            }
-
-            return new SyncItemResult(orderId, "Deleted");
-        }
-        catch (Exception ex)
-        {
-            return new SyncItemResult(orderId, "Rejected", ex.Message);
         }
     }
 

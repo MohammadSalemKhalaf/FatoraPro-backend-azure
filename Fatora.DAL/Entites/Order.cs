@@ -50,6 +50,16 @@ public class Order : ISyncableEntity
     // after its original number was issued.
     public bool IsEdited { get; set; }
 
+    // Set only by OrderService.DeleteAsync - a purely operational "hide from
+    // the Invoices list" flag, deliberately with no side effects of its own:
+    // no stock restore, no change to Status/RemainingBalance, nothing
+    // excluded from reports, the customer statement, or CSV exports. Those
+    // all keep reading this order exactly as if it were never deleted; only
+    // the Invoices list filters it out. Distinct from IsReturned, which is a
+    // real financial state change - deleting is expected to normally follow
+    // a return, but isn't required to.
+    public bool IsDeleted { get; set; }
+
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
     public DateOnly? DueDate { get; set; }

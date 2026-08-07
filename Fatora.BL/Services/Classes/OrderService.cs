@@ -203,6 +203,14 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         return ToResponse(order);
     }
 
+    // Purely a "hide from the Invoices list" operation - no stock restore,
+    // no effect on debt/sales/reports, and the customer statement and CSV
+    // exports keep showing it exactly as before (see Order.IsDeleted). The
+    // intended use is cleaning up an invoice that's already been Returned
+    // (whose stock/financial effects were already handled by ReturnAsync),
+    // but nothing here requires that - deleting a non-returned invoice is
+    // allowed too, at the owner's own discretion (this endpoint is already
+    // owner-only, see OrdersController.Delete).
     public async Task DeleteAsync(Guid userId, Guid id, Guid? scopeToRepId = null)
     {
         var order = await dbContext.Orders.FirstOrDefaultAsync(o =>
@@ -213,19 +221,7 @@ public class OrderService(AppDbContext dbContext) : IOrderService
             throw new NotFoundException(nameof(Order), id);
         }
 
-        // Skip if already returned - ReturnAsync already restored this
-        // stock once; doing it again here would double-count it.
-        if (!order.IsReturned)
-        {
-            // OrderItems (and their Product) are auto-included - see
-            // OrderConfiguration/ItemConfiguration.
-            foreach (var lineItem in order.OrderItems)
-            {
-                AdjustStock(lineItem.Product, lineItem.Quantity);
-            }
-        }
-
-        dbContext.Orders.Remove(order);
+        order.IsDeleted = true;
         await dbContext.SaveChangesAsync();
     }
 
@@ -535,6 +531,7 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         CoveredByReceipt = order.CoveredByReceipt,
         IsEdited = order.IsEdited,
         IsReturned = order.IsReturned,
+        IsDeleted = order.IsDeleted,
         Items = order.OrderItems.Select(oi => new OrderItemResponse
         {
             ProductId = oi.ProductId,

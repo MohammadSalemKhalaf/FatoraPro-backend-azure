@@ -24,5 +24,6 @@ public class OrderResponse
     public bool CoveredByReceipt { get; set; }
     public bool IsEdited { get; set; }
     public bool IsReturned { get; set; }
+    public bool IsDeleted { get; set; }
     public List<OrderItemResponse> Items { get; set; } = new();
 }
