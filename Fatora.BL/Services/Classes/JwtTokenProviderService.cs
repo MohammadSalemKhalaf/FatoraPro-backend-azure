@@ -19,7 +19,8 @@ namespace Fatora.BL.Services.Classes;
 public class JwtTokenProviderService(
     IConfiguration configuration,
     AppDbContext dbContext,
-    IRepAuthService repAuthService) : IJwtTokenProviderService
+    IRepAuthService repAuthService,
+    ISubAdminAuthService subAdminAuthService) : IJwtTokenProviderService
 {
     public async Task<JwtTokenResponse> GenerateToken(User user)
     {
@@ -68,17 +69,24 @@ public class JwtTokenProviderService(
             .Include(r => r.User)
             .FirstOrDefaultAsync(r => r.Token == hashedToken);
 
-        // A Rep session's raw refresh token never matches a RefreshTokens
-        // row (separate table - see RepRefreshToken.cs), so this is how a
-        // Rep and a normal User both refresh through the same
-        // POST /account/refresh-token endpoint without the frontend having
-        // to know or care which kind of session it's holding.
+        // A Rep or SubAdmin session's raw refresh token never matches a
+        // RefreshTokens row (separate tables - see RepRefreshToken.cs /
+        // SubAdminRefreshToken.cs), so this is how all three session kinds
+        // refresh through the same POST /account/refresh-token endpoint
+        // without the frontend having to know or care which kind it's
+        // holding.
         if (storedToken is null)
         {
             var repResult = await repAuthService.TryRefreshAsync(refreshToken);
             if (repResult is not null)
             {
                 return repResult;
+            }
+
+            var subAdminResult = await subAdminAuthService.TryRefreshAsync(refreshToken);
+            if (subAdminResult is not null)
+            {
+                return subAdminResult;
             }
         }
 

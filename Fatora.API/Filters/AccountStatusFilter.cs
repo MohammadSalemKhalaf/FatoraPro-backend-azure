@@ -80,6 +80,33 @@ public sealed class AccountStatusFilter(AppDbContext dbContext, IRepAuthService 
             return;
         }
 
+        // Simpler than the Rep branch above - a SubAdmin belongs to the
+        // platform directly, not to a subscription-bound tenant (see
+        // SubAdmin.cs), so there's no owner-status check to layer on top of
+        // its own IsActive/SessionVersion gate.
+        if (httpContext.User.IsInRole("SubAdmin"))
+        {
+            var subAdminId = httpContext.User.GetSubAdminIdOrNull();
+            var subAdmin = subAdminId is null
+                ? null
+                : await dbContext.SubAdmins.AsNoTracking().FirstOrDefaultAsync(s => s.Id == subAdminId);
+
+            if (subAdmin is null)
+            {
+                return;
+            }
+
+            var tokenSessionVersion = int.Parse(httpContext.User.FindFirstValue("sessionVersion") ?? "0");
+            if (!subAdmin.IsActive || tokenSessionVersion != subAdmin.SessionVersion)
+            {
+                throw new ForbiddenException(
+                    "This session has ended.",
+                    AccountStatusErrorCodes.SubAdminSessionEnded);
+            }
+
+            return;
+        }
+
         var userId = httpContext.User.GetUserId();
         var user = await dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
 

@@ -24,6 +24,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<RepCustomerAccess> RepCustomerAccesses { get; set; }
     public DbSet<PendingRepSync> PendingRepSyncs { get; set; }
     public DbSet<AnnualInventoryArchive> AnnualInventoryArchives { get; set; }
+    public DbSet<SubAdmin> SubAdmins { get; set; }
+    public DbSet<SubAdminRefreshToken> SubAdminRefreshTokens { get; set; }
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

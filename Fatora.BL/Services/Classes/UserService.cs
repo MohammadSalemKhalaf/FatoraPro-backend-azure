@@ -22,6 +22,11 @@ public static class AccountStatusErrorCodes
     // one sub-account out or deactivated it, nothing to do with billing.
     public const string RepSessionEnded = "REP_SESSION_ENDED";
 
+    // SubAdmin-specific counterpart to RepSessionEnded - the Admin logged
+    // this sub-account out or deactivated it, nothing to do with billing (a
+    // SubAdmin has no subscription of its own to expire - see SubAdmin.cs).
+    public const string SubAdminSessionEnded = "SUBADMIN_SESSION_ENDED";
+
     public static string For(string accountStatus) =>
         accountStatus == "Suspended" ? AccountSuspended : TrialExpired;
 }

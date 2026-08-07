@@ -24,4 +24,11 @@ public static class ClaimsPrincipalExtensions
     // are scoped down to.
     public static Guid? GetRepIdOrNull(this ClaimsPrincipal user) =>
         user.IsInRole("Rep") ? user.GetUserId() : null;
+
+    // Null for anything other than a SubAdmin session. For a SubAdmin
+    // session, the "sub" claim IS the SubAdmin's own id (see
+    // SubAdminAuthService.GenerateTokenAsync) - mirrors GetRepIdOrNull
+    // exactly.
+    public static Guid? GetSubAdminIdOrNull(this ClaimsPrincipal user) =>
+        user.IsInRole("SubAdmin") ? user.GetUserId() : null;
 }

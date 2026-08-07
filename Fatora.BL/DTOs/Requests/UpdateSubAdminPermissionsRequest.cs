@@ -1,0 +1,8 @@
+namespace Fatora.BL.DTOs.Requests;
+
+public class UpdateSubAdminPermissionsRequest
+{
+    public bool CanActivateMonthly { get; set; }
+    public bool CanActivateAnnual { get; set; }
+    public bool CanActivateCustomMonths { get; set; }
+}
