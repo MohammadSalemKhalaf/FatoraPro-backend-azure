@@ -37,11 +37,14 @@ public class RepsController(
         return StatusCode(StatusCodes.Status201Created, result);
     }
 
+    // includeHidden=true is how RepFilterRow's "filter by rep" picker still
+    // resolves a deleted rep - the plain reps-management list (RepsPage)
+    // never passes it, which is what actually keeps that page decluttered.
     [Authorize(Roles = "SalesRep")]
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll([FromQuery] bool includeHidden = false)
     {
-        var result = await repService.GetAllAsync(User.GetUserId());
+        var result = await repService.GetAllAsync(User.GetUserId(), includeHidden);
         return Ok(result);
     }
 
@@ -77,6 +80,14 @@ public class RepsController(
     public async Task<IActionResult> Deactivate(Guid id)
     {
         await repService.DeactivateAsync(User.GetUserId(), id);
+        return NoContent();
+    }
+
+    [Authorize(Roles = "SalesRep")]
+    [HttpPost("{id:guid}/delete")]
+    public async Task<IActionResult> Delete(Guid id)
+    {
+        await repService.DeleteAsync(User.GetUserId(), id);
         return NoContent();
     }
 

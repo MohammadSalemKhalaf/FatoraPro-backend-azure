@@ -62,6 +62,17 @@ public class Rep
 
     public bool IsActive { get; set; } = true;
 
+    // Set only by RepService.DeleteAsync (a superset of deactivation - it
+    // also sets IsActive = false and bumps SessionVersion, since a hidden
+    // rep must never keep working) - hides this rep from the owner's
+    // management list (RepService.GetAllAsync's default) without touching
+    // any Order/Customer/Product/Receipt it created, which keep resolving
+    // and stay filterable exactly like before (see CreatedByRepId on those
+    // entities and GetAllAsync's includeHidden param). Once nothing
+    // references it any more, AnnualInventoryService's post-wipe sweep hard-
+    // deletes it for real - see HardDeleteOrphanedHiddenRepsAsync.
+    public bool IsHidden { get; set; } = false;
+
     // Bumped by RepService.LogoutAsync/DeactivateAsync, embedded as a claim
     // at token-issue time (see RepAuthService.GenerateTokenAsync) - lets
     // AccountStatusFilter reject an already-issued access token the instant

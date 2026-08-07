@@ -10,6 +10,7 @@ public class RepResponse
     public string? QrToken { get; set; }
 
     public bool IsActive { get; set; }
+    public bool IsHidden { get; set; }
     public string ProductAccessMode { get; set; } = string.Empty;
     public string CustomerAccessMode { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }

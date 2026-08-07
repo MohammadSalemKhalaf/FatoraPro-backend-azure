@@ -22,6 +22,13 @@ public class AnnualInventoryController(IAnnualInventoryService annualInventorySe
         return Ok(result);
     }
 
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id, DeleteAnnualInventoryArchiveRequest request)
+    {
+        await annualInventoryService.DeleteArchiveAsync(User.GetUserId(), id, request.Password);
+        return NoContent();
+    }
+
     // A short follow-up to Run - the device renders the PDF locally from
     // Run's own response, then uploads it here to attach to that same
     // archive (see AnnualInventoryArchive.PdfContent).

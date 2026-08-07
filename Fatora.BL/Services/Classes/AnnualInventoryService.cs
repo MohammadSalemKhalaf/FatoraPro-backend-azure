@@ -98,6 +98,15 @@ public class AnnualInventoryService(AppDbContext dbContext, IPasswordHasherServi
         // without the archive that's supposed to be its replacement.
         await dbContext.SaveChangesAsync();
 
+        // A separate, follow-up pass (not part of the transaction above): a
+        // hidden rep (see Rep.IsHidden / RepService.DeleteAsync) can only
+        // ever be hard-deleted once nothing references it any more, and this
+        // wipe having just run is the one moment that's actually likely to
+        // become true. Safe to run on every call regardless of which boxes
+        // were checked - it's a pure "if now-orphaned, clean it up" pass, a
+        // no-op whenever there's nothing eligible.
+        await HardDeleteOrphanedHiddenRepsAsync(userId);
+
         return new RunAnnualInventoryResponse
         {
             Id = archive.Id,
@@ -110,6 +119,24 @@ public class AnnualInventoryService(AppDbContext dbContext, IPasswordHasherServi
             CsvContent = archive.CsvContent,
             CustomerSummaries = customerSummaries
         };
+    }
+
+    // Deletes the archive record itself, not the account data it recorded -
+    // that data is already long gone by the time an archive exists at all
+    // (see RunAsync). Password-gated the same way RunAsync is, since this
+    // permanently destroys the one remaining record of a past wipe (its CSV/
+    // PDF are stored directly on this row - see AnnualInventoryArchive).
+    public async Task DeleteArchiveAsync(Guid userId, Guid archiveId, string password)
+    {
+        var user = await dbContext.Users.FirstAsync(u => u.Id == userId);
+        if (!passwordHasher.Verify(user, password, user.Password))
+        {
+            throw new UnauthorizedException("Incorrect password.");
+        }
+
+        var archive = await FindOwnedArchive(userId, archiveId);
+        dbContext.AnnualInventoryArchives.Remove(archive);
+        await dbContext.SaveChangesAsync();
     }
 
     public async Task<AnnualInventoryArchiveResponse> AttachPdfAsync(Guid userId, Guid archiveId, byte[] pdfBytes)
@@ -144,6 +171,41 @@ public class AnnualInventoryService(AppDbContext dbContext, IPasswordHasherServi
             throw new NotFoundException(nameof(AnnualInventoryArchive.PdfContent), archiveId);
         }
         return (archive.PdfContent, archive.Year);
+    }
+
+    // A hidden rep (Rep.IsHidden, set by RepService.DeleteAsync) is only
+    // ever hard-deleted once nothing references it any more -
+    // CreatedByRepId on Order/Customer/Product is a Restrict FK precisely
+    // so this can never run early and orphan a still-live record (see
+    // OrderConfiguration.CreatedByRep and friends). Receipts are checked
+    // too even though this service never deletes them itself - a rep that
+    // ever recorded one stays hidden-but-present indefinitely rather than
+    // ever silently losing that receipt's attribution.
+    private async Task HardDeleteOrphanedHiddenRepsAsync(Guid userId)
+    {
+        var hiddenReps = await dbContext.Reps
+            .Where(r => r.OwnerUserId == userId && r.IsHidden)
+            .ToListAsync();
+        if (hiddenReps.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var rep in hiddenReps)
+        {
+            var stillReferenced =
+                await dbContext.Orders.AnyAsync(o => o.CreatedByRepId == rep.Id) ||
+                await dbContext.Customers.AnyAsync(c => c.CreatedByRepId == rep.Id) ||
+                await dbContext.Products.AnyAsync(p => p.CreatedByRepId == rep.Id) ||
+                await dbContext.Receipts.AnyAsync(r => r.CreatedByRepId == rep.Id);
+
+            if (!stillReferenced)
+            {
+                dbContext.Reps.Remove(rep);
+            }
+        }
+
+        await dbContext.SaveChangesAsync();
     }
 
     private async Task<AnnualInventoryArchive> FindOwnedArchive(Guid userId, Guid archiveId)

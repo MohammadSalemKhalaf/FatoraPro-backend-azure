@@ -36,10 +36,15 @@ public class RepService(AppDbContext dbContext) : IRepService
         return ToResponse(rep, includeQrToken: true);
     }
 
-    public async Task<List<RepResponse>> GetAllAsync(Guid ownerUserId)
+    // includeHidden: false (the management list's default) is what keeps a
+    // deleted rep out of the owner's cluttered "إدارة المندوبين" view - true
+    // is for the separate "filter by rep" picker (RepFilterRow), which still
+    // needs to resolve a deleted rep by design, since its historical
+    // invoices/customers/receipts remain fully filterable. See Rep.IsHidden.
+    public async Task<List<RepResponse>> GetAllAsync(Guid ownerUserId, bool includeHidden = false)
     {
         var reps = await dbContext.Reps
-            .Where(r => r.OwnerUserId == ownerUserId)
+            .Where(r => r.OwnerUserId == ownerUserId && (includeHidden || !r.IsHidden))
             .OrderByDescending(r => r.CreatedAt)
             .ToListAsync();
 
@@ -101,6 +106,25 @@ public class RepService(AppDbContext dbContext) : IRepService
         // lets TryRefreshAsync tell "this rep was deactivated" apart from
         // "this token never existed" and return the dedicated,
         // REP_SESSION_ENDED-coded rejection instead of a generic one.
+    }
+
+    // Distinct from DeactivateAsync: this is the owner "letting a rep go" for
+    // good - it also blocks login (IsActive=false, SessionVersion++, exactly
+    // like deactivation) but additionally hides it from the management list
+    // (see Rep.IsHidden / GetAllAsync's includeHidden param). Every Order/
+    // Customer/Product/Receipt it created is untouched and keeps resolving -
+    // the rep row itself only ever disappears for real once
+    // AnnualInventoryService's post-wipe sweep finds nothing left pointing
+    // at it. There is deliberately no "undelete" - matches Order.IsDeleted's
+    // same one-way design.
+    public async Task DeleteAsync(Guid ownerUserId, Guid repId)
+    {
+        var rep = await FindOwnedRep(ownerUserId, repId);
+
+        rep.IsActive = false;
+        rep.IsHidden = true;
+        rep.SessionVersion++;
+        await dbContext.SaveChangesAsync();
     }
 
     public async Task<RepResponse> ReactivateAsync(Guid ownerUserId, Guid repId)
@@ -237,6 +261,7 @@ public class RepService(AppDbContext dbContext) : IRepService
         Name = rep.Name,
         QrToken = includeQrToken ? rep.QrToken : null,
         IsActive = rep.IsActive,
+        IsHidden = rep.IsHidden,
         ProductAccessMode = rep.ProductAccessMode.ToString(),
         CustomerAccessMode = rep.CustomerAccessMode.ToString(),
         CreatedAt = rep.CreatedAt
