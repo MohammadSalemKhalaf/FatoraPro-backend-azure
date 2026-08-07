@@ -13,7 +13,19 @@ public interface IUserService
     // checked against the requested SubscriptionType before anything is
     // written.
     public Task<AdminUserResponse> UpdateSubscriptionAsync(Guid userId, UpdateSubscriptionRequest request, Guid? actingSubAdminId = null);
-    public Task<List<AdminUserResponse>> GetUsersAsync(string? search);
+
+    // subAdminIdFilter: the Admin's own optional "filter by SubAdmin"
+    // narrowing (see SubAdminFilterRow). actingSubAdminId: non-null when a
+    // SubAdmin session itself is calling - forces the result to that
+    // SubAdmin's own claimed subscribers regardless of subAdminIdFilter, so
+    // a SubAdmin can never see the platform's full list or another
+    // SubAdmin's claimed set even if it tampers with the query param.
+    public Task<List<AdminUserResponse>> GetUsersAsync(string? search, Guid? subAdminIdFilter = null, Guid? actingSubAdminId = null);
+
+    // actingSubAdminId null (top Admin) clears attribution; non-null (a
+    // SubAdmin) claims the subscriber for itself - see UserService for why
+    // this needs no branching.
+    public Task ClaimSubscriberAsync(Guid subscriberId, Guid? actingSubAdminId);
     public Task ResetPasswordAsync(Guid userId, string newPassword);
     public Task<UserResponse> GetProfileAsync(Guid userId);
     public Task<string?> GetLogoUrlAsync(Guid userId);

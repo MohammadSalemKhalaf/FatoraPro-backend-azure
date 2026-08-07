@@ -61,6 +61,17 @@ public class User
     // switches away from Custom (see UpdateSubscriptionAsync) so a stale
     // value never lingers to confuse a later read.
     public int? CustomMonths { get; set; }
+
+    // Which SubAdmin (if any) currently claims this subscriber, for
+    // filtering/reporting only - never an access-control gate, since every
+    // Admin/SubAdmin can always manage every subscriber regardless (see
+    // UsersController). Set by scanning the subscriber's own QR
+    // (SubAdminsController.ClaimSubscriber): a SubAdmin scan sets it to
+    // itself, a top-Admin scan clears it back to null. Restrict, not
+    // cascade, so a hidden/deleted SubAdmin's past attribution keeps
+    // resolving - same reasoning as Order.CreatedByRepId.
+    public Guid? ManagedBySubAdminId { get; set; }
+    public SubAdmin? ManagedBySubAdmin { get; set; }
     public DateTime CreatedAt { get; set; }
 
 

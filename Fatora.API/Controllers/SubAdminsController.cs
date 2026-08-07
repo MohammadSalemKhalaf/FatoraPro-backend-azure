@@ -20,6 +20,7 @@ namespace Fatora.API.Controllers;
 public class SubAdminsController(
     ISubAdminService subAdminService,
     ISubAdminAuthService subAdminAuthService,
+    IUserService userService,
     CreateSubAdminRequestValidator createSubAdminValidator) : ControllerBase
 {
     [Authorize(Roles = "Admin")]
@@ -109,6 +110,21 @@ public class SubAdminsController(
     {
         var result = await subAdminService.SetPermissionsAsync(id, request);
         return Ok(result);
+    }
+
+    // Scanning a subscriber's own "account activation confirmation" QR (see
+    // the tenant Settings page) attributes them for filtering/reporting -
+    // never an access-control gate, every Admin/SubAdmin can always manage
+    // every subscriber regardless (see UsersController). A SubAdmin caller
+    // claims the subscriber for itself; the top Admin clears any existing
+    // attribution - see UserService.ClaimSubscriberAsync for why this needs
+    // no branching here.
+    [Authorize(Roles = "Admin,SubAdmin")]
+    [HttpPost("claim-subscriber")]
+    public async Task<IActionResult> ClaimSubscriber(ClaimSubscriberRequest request)
+    {
+        await userService.ClaimSubscriberAsync(request.SubscriberId, User.GetSubAdminIdOrNull());
+        return NoContent();
     }
 
     // No username/password to authenticate with at this point - this is the

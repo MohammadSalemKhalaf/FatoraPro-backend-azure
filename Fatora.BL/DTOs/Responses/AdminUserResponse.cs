@@ -14,6 +14,8 @@ public class AdminUserResponse
     public DateTime SubscriptionStart { get; set; }
     public DateTime? SubscriptionEnd { get; set; }
     public int? CustomMonths { get; set; }
+    public Guid? ManagedBySubAdminId { get; set; }
+    public string? ManagedBySubAdminName { get; set; }
     public string AccountStatus { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
 }

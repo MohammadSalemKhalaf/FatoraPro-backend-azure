@@ -152,7 +152,7 @@ public class UserService(AppDbContext dbContext, IPasswordHasherService password
         }
     }
 
-    public async Task<List<AdminUserResponse>> GetUsersAsync(string? search)
+    public async Task<List<AdminUserResponse>> GetUsersAsync(string? search, Guid? subAdminIdFilter = null, Guid? actingSubAdminId = null)
     {
         var query = dbContext.Users.AsQueryable();
 
@@ -164,9 +164,41 @@ public class UserService(AppDbContext dbContext, IPasswordHasherService password
                 EF.Functions.ILike(u.Name, $"%{search}%"));
         }
 
+        // A SubAdmin session's own id always wins over whatever it passed as
+        // subAdminIdFilter - see IUserService.GetUsersAsync.
+        var effectiveSubAdminFilter = actingSubAdminId ?? subAdminIdFilter;
+        if (effectiveSubAdminFilter is not null)
+        {
+            query = query.Where(u => u.ManagedBySubAdminId == effectiveSubAdminFilter);
+        }
+
         var users = await query.ToListAsync();
 
-        return users.Select(ToAdminResponse).ToList();
+        // One batch lookup for every SubAdmin name this page of results
+        // needs, instead of a per-row query - see the plan's own note on
+        // this.
+        var subAdminIds = users.Where(u => u.ManagedBySubAdminId is not null)
+            .Select(u => u.ManagedBySubAdminId!.Value)
+            .Distinct()
+            .ToList();
+        var subAdminNames = subAdminIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await dbContext.SubAdmins
+                .Where(s => subAdminIds.Contains(s.Id))
+                .ToDictionaryAsync(s => s.Id, s => s.Name);
+
+        return users.Select(u => ToAdminResponse(u, subAdminNames)).ToList();
+    }
+
+    public async Task ClaimSubscriberAsync(Guid subscriberId, Guid? actingSubAdminId)
+    {
+        var user = await FindUser(subscriberId);
+
+        // null (top Admin) clears attribution; a SubAdmin's own id claims it
+        // - no branching needed, this is exactly the confirmed semantics.
+        user.ManagedBySubAdminId = actingSubAdminId;
+
+        await dbContext.SaveChangesAsync();
     }
 
     public async Task<UserResponse> GetProfileAsync(Guid userId)
@@ -346,7 +378,13 @@ public class UserService(AppDbContext dbContext, IPasswordHasherService password
         _ => throw new ArgumentOutOfRangeException(nameof(type))
     };
 
-    private static AdminUserResponse ToAdminResponse(User user) => new()
+    // subAdminNames: the batch lookup GetUsersAsync builds once for a whole
+    // page of results - omitted (null) at the single-user call site in
+    // UpdateSubscriptionAsync, where a full-dictionary batch would be
+    // overkill for one row; ManagedBySubAdminName is simply left
+    // unpopulated there since that response isn't used to display
+    // attribution.
+    private static AdminUserResponse ToAdminResponse(User user, IReadOnlyDictionary<Guid, string>? subAdminNames = null) => new()
     {
         Id = user.Id,
         UserName = user.UserName,
@@ -360,6 +398,10 @@ public class UserService(AppDbContext dbContext, IPasswordHasherService password
         SubscriptionStart = user.SubscriptionStart,
         SubscriptionEnd = user.SubscriptionEnd,
         CustomMonths = user.CustomMonths,
+        ManagedBySubAdminId = user.ManagedBySubAdminId,
+        ManagedBySubAdminName = user.ManagedBySubAdminId is not null && subAdminNames is not null
+            ? subAdminNames.GetValueOrDefault(user.ManagedBySubAdminId.Value)
+            : null,
         AccountStatus = ComputeAccountStatus(user),
         CreatedAt = user.CreatedAt
     };

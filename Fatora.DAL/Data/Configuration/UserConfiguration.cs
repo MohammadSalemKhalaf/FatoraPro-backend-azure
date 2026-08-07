@@ -26,6 +26,16 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(x => x.NextInvoiceNumber).HasDefaultValue(1);
         builder.Property(x => x.NextInvoiceNumberYear).HasDefaultValue(0);
         builder.HasIndex(x=>x.UserName).IsUnique();
-        
+        builder.HasIndex(x => x.ManagedBySubAdminId);
+
+        // Restrict, not cascade: a SubAdmin is only ever soft-deactivated/
+        // hidden (see SubAdmin.cs), never actually removed, so this never
+        // fires in practice - but it documents that a subscriber's
+        // attribution must keep resolving even if that ever changes. Same
+        // reasoning as Order.CreatedByRepId.
+        builder.HasOne(x => x.ManagedBySubAdmin)
+            .WithMany()
+            .HasForeignKey(x => x.ManagedBySubAdminId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }
