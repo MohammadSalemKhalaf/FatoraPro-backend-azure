@@ -7,7 +7,12 @@ public interface IUserService
 {
     public Task<UserResponse> CreateSalesRepAsync(CreateSalesRepRequest request);
     public Task<UserResponse> RegisterAsync(RegisterRequest request);
-    public Task<AdminUserResponse> UpdateSubscriptionAsync(Guid userId, UpdateSubscriptionRequest request);
+    // actingSubAdminId: null means the caller is the top Admin, who always
+    // bypasses the permission gate below. Non-null means a SubAdmin is
+    // calling (see UsersController) - its own granted CanActivate* flags are
+    // checked against the requested SubscriptionType before anything is
+    // written.
+    public Task<AdminUserResponse> UpdateSubscriptionAsync(Guid userId, UpdateSubscriptionRequest request, Guid? actingSubAdminId = null);
     public Task<List<AdminUserResponse>> GetUsersAsync(string? search);
     public Task ResetPasswordAsync(Guid userId, string newPassword);
     public Task<UserResponse> GetProfileAsync(Guid userId);

@@ -15,7 +15,12 @@ public enum SubscriptionType
     Trial,
     Monthly,
     Annual,
-    Lifetime
+    Lifetime,
+
+    // Duration in months is arbitrary, given by CustomMonths below - lets a
+    // SubAdmin (see SubAdmin.CanActivateCustomMonths) or the Admin grant a
+    // one-off length that doesn't match Monthly/Annual.
+    Custom
 }
 
 
@@ -48,6 +53,14 @@ public class User
     public SubscriptionType SubscriptionType { get; set; } = SubscriptionType.Trial;
     public DateTime SubscriptionStart { get; set; }
     public DateTime? SubscriptionEnd { get; set; }
+
+    // Only meaningful when SubscriptionType is Custom - the month count that
+    // SubscriptionEnd was computed from (see
+    // UserService.ComputeSubscriptionEnd). Null and ignored for every other
+    // SubscriptionType, cleared back to null the moment a later activation
+    // switches away from Custom (see UpdateSubscriptionAsync) so a stale
+    // value never lingers to confuse a later read.
+    public int? CustomMonths { get; set; }
     public DateTime CreatedAt { get; set; }
 
 

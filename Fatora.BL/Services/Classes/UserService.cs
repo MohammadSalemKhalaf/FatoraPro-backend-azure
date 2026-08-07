@@ -3,6 +3,7 @@ using Fatora.BL.DTOs.Responses;
 using Fatora.BL.Exceptions;
 using Fatora.BL.Services.Abstractions;
 using Fatora.DAL.Data;
+using Fatora.DAL.Entites;
 using Fatora.DAL.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -99,18 +100,56 @@ public class UserService(AppDbContext dbContext, IPasswordHasherService password
         return ToResponse(user);
     }
 
-    public async Task<AdminUserResponse> UpdateSubscriptionAsync(Guid userId, UpdateSubscriptionRequest request)
+    public async Task<AdminUserResponse> UpdateSubscriptionAsync(Guid userId, UpdateSubscriptionRequest request, Guid? actingSubAdminId = null)
     {
+        if (actingSubAdminId is not null)
+        {
+            await EnsureSubAdminCanActivateAsync(actingSubAdminId.Value, request.SubscriptionType);
+        }
+
         var user = await FindUser(userId);
 
         var start = DateTime.UtcNow;
         user.SubscriptionType = request.SubscriptionType;
         user.SubscriptionStart = start;
-        user.SubscriptionEnd = ComputeSubscriptionEnd(request.SubscriptionType, start);
+        user.SubscriptionEnd = ComputeSubscriptionEnd(request.SubscriptionType, start, request.CustomMonths);
+
+        // Only ever meaningful for Custom - clearing it on every other type
+        // means a later read never sees a stale month count left over from
+        // a previous Custom activation.
+        user.CustomMonths = request.SubscriptionType == SubscriptionType.Custom ? request.CustomMonths : null;
 
         await dbContext.SaveChangesAsync();
 
         return ToAdminResponse(user);
+    }
+
+    // A SubAdmin can only ever activate the durations it was explicitly
+    // granted (see SubAdmin.CanActivateMonthly/Annual/CustomMonths) - Trial
+    // and Lifetime are never grantable to a SubAdmin at all, regardless of
+    // its flags, since neither is "a duration you activate for a paying
+    // subscriber" in the permission's sense. The top Admin (actingSubAdminId
+    // null) always bypasses this entirely - see UpdateSubscriptionAsync.
+    private async Task EnsureSubAdminCanActivateAsync(Guid subAdminId, SubscriptionType requestedType)
+    {
+        var subAdmin = await dbContext.SubAdmins.FirstOrDefaultAsync(s => s.Id == subAdminId);
+        if (subAdmin is null)
+        {
+            throw new NotFoundException(nameof(SubAdmin), subAdminId);
+        }
+
+        var allowed = requestedType switch
+        {
+            SubscriptionType.Monthly => subAdmin.CanActivateMonthly,
+            SubscriptionType.Annual => subAdmin.CanActivateAnnual,
+            SubscriptionType.Custom => subAdmin.CanActivateCustomMonths,
+            _ => false
+        };
+
+        if (!allowed)
+        {
+            throw new ForbiddenException($"You are not permitted to activate a {requestedType} subscription.");
+        }
     }
 
     public async Task<List<AdminUserResponse>> GetUsersAsync(string? search)
@@ -297,12 +336,13 @@ public class UserService(AppDbContext dbContext, IPasswordHasherService password
         return user.SubscriptionType == SubscriptionType.Trial ? "Trial" : "Active";
     }
 
-    internal static DateTime? ComputeSubscriptionEnd(SubscriptionType type, DateTime start) => type switch
+    internal static DateTime? ComputeSubscriptionEnd(SubscriptionType type, DateTime start, int? customMonths = null) => type switch
     {
         SubscriptionType.Trial => start.AddDays(3),
         SubscriptionType.Monthly => start.AddDays(30),
         SubscriptionType.Annual => start.AddDays(365),
         SubscriptionType.Lifetime => null,
+        SubscriptionType.Custom => start.AddMonths(customMonths ?? throw new ArgumentNullException(nameof(customMonths), "CustomMonths is required when SubscriptionType is Custom")),
         _ => throw new ArgumentOutOfRangeException(nameof(type))
     };
 
@@ -319,6 +359,7 @@ public class UserService(AppDbContext dbContext, IPasswordHasherService password
         SubscriptionType = user.SubscriptionType.ToString(),
         SubscriptionStart = user.SubscriptionStart,
         SubscriptionEnd = user.SubscriptionEnd,
+        CustomMonths = user.CustomMonths,
         AccountStatus = ComputeAccountStatus(user),
         CreatedAt = user.CreatedAt
     };

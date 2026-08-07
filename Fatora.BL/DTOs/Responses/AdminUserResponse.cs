@@ -13,6 +13,7 @@ public class AdminUserResponse
     public string SubscriptionType { get; set; } = string.Empty;
     public DateTime SubscriptionStart { get; set; }
     public DateTime? SubscriptionEnd { get; set; }
+    public int? CustomMonths { get; set; }
     public string AccountStatus { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
 }
