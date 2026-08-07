@@ -191,6 +191,7 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
         City = customer.City,
         IsActive = customer.IsActive,
         CreatedAt = customer.CreatedAt,
-        UpdatedAt = customer.UpdatedAt
+        UpdatedAt = customer.UpdatedAt,
+        CreatedByRepId = customer.CreatedByRepId
     };
 }

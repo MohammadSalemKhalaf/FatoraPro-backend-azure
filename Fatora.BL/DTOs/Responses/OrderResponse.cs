@@ -25,5 +25,10 @@ public class OrderResponse
     public bool IsEdited { get; set; }
     public bool IsReturned { get; set; }
     public bool IsDeleted { get; set; }
+
+    // Null for anything the owner created - see ProductResponse's identical
+    // field for why this needs to reach the client at all (rep-scoped local
+    // filtering for the owner's own "filter by rep" view).
+    public Guid? CreatedByRepId { get; set; }
     public List<OrderItemResponse> Items { get; set; } = new();
 }

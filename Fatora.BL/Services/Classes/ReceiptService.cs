@@ -32,6 +32,7 @@ public class ReceiptService(AppDbContext dbContext) : IReceiptService
         Amount = receipt.Amount,
         IsActive = receipt.IsActive,
         CreatedAt = receipt.CreatedAt,
-        UpdatedAt = receipt.UpdatedAt
+        UpdatedAt = receipt.UpdatedAt,
+        CreatedByRepId = receipt.CreatedByRepId
     };
 }
