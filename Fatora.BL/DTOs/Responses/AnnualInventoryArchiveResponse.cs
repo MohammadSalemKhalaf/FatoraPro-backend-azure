@@ -18,4 +18,17 @@ public class AnnualInventoryArchiveResponse
 public class RunAnnualInventoryResponse : AnnualInventoryArchiveResponse
 {
     public required string CsvContent { get; set; }
+    public List<CustomerSummaryResponse> CustomerSummaries { get; set; } = [];
+}
+
+// One row per customer with at least one invoice - drives the PDF's
+// per-customer table. Not persisted on the archive itself: the PDF that's
+// rendered from this is what gets permanently stored, so there's nothing
+// to keep this data around for once that upload completes.
+public class CustomerSummaryResponse
+{
+    public required string Name { get; set; }
+    public decimal TotalInvoiced { get; set; }
+    public decimal TotalPaid { get; set; }
+    public decimal TotalRemaining { get; set; }
 }

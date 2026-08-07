@@ -17,6 +17,8 @@ namespace Fatora.BL.Services.Classes;
 public class AnnualInventoryService(AppDbContext dbContext, IPasswordHasherService passwordHasher)
     : IAnnualInventoryService
 {
+    private const decimal DebtTolerance = 0.01m;
+
     public async Task<RunAnnualInventoryResponse> RunAsync(Guid userId, RunAnnualInventoryRequest request)
     {
         var user = await dbContext.Users.FirstAsync(u => u.Id == userId);
@@ -31,31 +33,29 @@ public class AnnualInventoryService(AppDbContext dbContext, IPasswordHasherServi
             throw new BadRequestException("Select at least one category to include.");
         }
 
-        // Customers and Items both force Invoices along with them - a
-        // deleted customer can't leave dangling invoices, and neither can a
-        // deleted product leave dangling invoice lines. The archive below
-        // reflects what was actually wiped, not just what was checked.
+        // Customers and Items both force Invoices along with them for the
+        // *wipe* - a deleted customer can't leave dangling invoices, and
+        // neither can a deleted product leave dangling invoice lines. This
+        // only decides what gets removed below; the archive itself is
+        // always a complete snapshot of everything regardless (see
+        // BuildCsv) - it's the account's permanent closing record, not just
+        // a receipt for whichever boxes were checked.
         var includeInvoices = request.IncludeInvoices || request.IncludeCustomers || request.IncludeItems;
 
         var orders = await dbContext.Orders
             .Include(o => o.Customer)
             .Where(o => o.UserId == userId)
             .ToListAsync();
+        var customers = await dbContext.Customers.Where(c => c.UserId == userId).ToListAsync();
+        var products = await dbContext.Products.Where(p => p.UserId == userId).ToListAsync();
+        var receipts = await dbContext.Receipts.Where(r => r.UserId == userId && r.IsActive).ToListAsync();
 
         var totalSales = orders.Where(o => !o.IsReturned).Sum(o => o.Total);
         var totalCollected = orders.Sum(o => o.PaidAmount);
         var totalRemainingDebt = orders.Sum(o => o.RemainingBalance);
 
-        var customers = request.IncludeCustomers
-            ? await dbContext.Customers.Where(c => c.UserId == userId).ToListAsync()
-            : [];
-        var products = request.IncludeItems
-            ? await dbContext.Products.Where(p => p.UserId == userId).ToListAsync()
-            : [];
-
-        var csvContent = BuildCsv(
-            includeInvoices, request.IncludeCustomers, request.IncludeItems,
-            totalSales, totalCollected, totalRemainingDebt, orders, customers, products);
+        var csvContent = BuildCsv(totalSales, totalCollected, totalRemainingDebt, orders, customers, products, receipts);
+        var customerSummaries = BuildCustomerSummaries(orders);
 
         // Deletion order matters: Orders (and their OrderItems, cascaded)
         // always go first whenever Invoices is effectively included, so
@@ -107,7 +107,8 @@ public class AnnualInventoryService(AppDbContext dbContext, IPasswordHasherServi
             TotalRemainingDebt = archive.TotalRemainingDebt,
             HasPdf = false,
             CreatedAt = archive.CreatedAt,
-            CsvContent = archive.CsvContent
+            CsvContent = archive.CsvContent,
+            CustomerSummaries = customerSummaries
         };
     }
 
@@ -169,88 +170,163 @@ public class AnnualInventoryService(AppDbContext dbContext, IPasswordHasherServi
         CreatedAt = archive.CreatedAt
     };
 
-    // Mirrors the frontend's DataExportService.buildCsv exactly (same
-    // quoting/row convention, same section headers) so a downloaded annual
-    // archive reads consistently with the app's regular CSV export - a
-    // summary section up top for a quick glance, full detail below for
-    // whichever categories this run actually wiped.
+    // One row per customer who has at least one invoice - drives the PDF's
+    // per-customer table. Mirrors the same effective-remaining rule as the
+    // CSV (a covered-by-receipt invoice counts as settled, not outstanding).
+    private static List<CustomerSummaryResponse> BuildCustomerSummaries(List<Order> orders) =>
+        orders
+            .GroupBy(o => o.CustomerId)
+            .Select(g => new CustomerSummaryResponse
+            {
+                Name = g.First().Customer.Name,
+                TotalInvoiced = g.Where(o => !o.IsReturned).Sum(o => o.Total),
+                TotalPaid = g.Sum(o => o.PaidAmount),
+                TotalRemaining = g.Sum(o => EffectiveRemaining(o))
+            })
+            .OrderByDescending(c => c.TotalInvoiced)
+            .ToList();
+
+    // coveredByReceipt is a separate flag from status (see
+    // Order.CoveredByReceipt) - an administrative write-off leaves
+    // RemainingBalance itself untouched, so both the CSV and the PDF's
+    // per-customer table have to zero it out the same way the app's own UI
+    // (a strikethrough) and the existing data-export feature already do.
+    private static decimal EffectiveRemaining(Order order) =>
+        !order.IsReturned && order.CoveredByReceipt ? 0 : order.RemainingBalance;
+
+    private static string StatusLabel(Order order, DateOnly today)
+    {
+        if (!order.IsReturned && order.CoveredByReceipt) return "مغطاة بقبضة";
+        return OrderService.ComputeStatus(order, today) switch
+        {
+            "Paid" => "مدفوعة",
+            "Overdue" => "متأخرة",
+            "PartiallyPaid" => "مدفوعة جزئيًا",
+            "Returned" => "مرتجعة",
+            _ => "مُرسلة"
+        };
+    }
+
+    // Always a complete snapshot of the whole account at the moment of the
+    // run - customers/items/invoices all included regardless of which boxes
+    // were actually checked for deletion (see RunAsync) - and structured to
+    // match the app's existing DataExportService.buildCsv on the frontend
+    // exactly (same section headers/columns/quoting), so a downloaded
+    // annual archive reads consistently with the everyday export feature
+    // instead of being its own, unfamiliar format.
     private static string BuildCsv(
-        bool includeInvoices, bool includeCustomers, bool includeItems,
         decimal totalSales, decimal totalCollected, decimal totalRemainingDebt,
-        List<Order> orders, List<Customer> customers, List<Product> products)
+        List<Order> orders, List<Customer> customers, List<Product> products, List<Receipt> receipts)
     {
         var sb = new StringBuilder();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
         AppendRow(sb, "ملخص الجرد السنوي");
         AppendRow(sb, "إجمالي المبيعات", "إجمالي المقبوض", "إجمالي الدين المتبقي");
         AppendRow(sb, totalSales.ToString("F2"), totalCollected.ToString("F2"), totalRemainingDebt.ToString("F2"));
         sb.Append("\r\n");
 
-        if (includeInvoices)
+        var returned = orders.Where(o => o.IsReturned).ToList();
+        var active = orders.Where(o => !o.IsReturned).ToList();
+
+        if (returned.Count > 0)
         {
-            var returned = orders.Where(o => o.IsReturned).ToList();
-            var active = orders.Where(o => !o.IsReturned).ToList();
-
-            if (returned.Count > 0)
+            AppendRow(sb, "الفواتير المرتجعة");
+            AppendRow(sb, "رقم الفاتورة", "العميل", "رقم الهاتف", "تاريخ الإصدار", "القيمة الأصلية");
+            decimal returnedTotal = 0;
+            foreach (var order in returned)
             {
-                AppendRow(sb, "الفواتير المرتجعة");
-                AppendRow(sb, "رقم الفاتورة", "العميل", "رقم الهاتف", "تاريخ الإصدار", "القيمة الأصلية");
-                decimal returnedTotal = 0;
-                foreach (var order in returned)
-                {
-                    returnedTotal += order.Total;
-                    AppendRow(sb, order.InvoiceNumber, order.Customer.Name, order.Customer.PhoneNumber ?? "",
-                        order.CreatedAt.ToString("yyyy-MM-dd"), order.Total.ToString("F2"));
-                }
-                AppendRow(sb, "الإجمالي العام", "", "", "", returnedTotal.ToString("F2"));
-                sb.Append("\r\n");
-            }
-
-            AppendRow(sb, "الفواتير");
-            AppendRow(sb, "رقم الفاتورة", "العميل", "رقم الهاتف", "تاريخ الإصدار", "تاريخ الاستحقاق",
-                "الخصم", "الإجمالي", "المدفوع", "المتبقي");
-            decimal discountTotal = 0, amountTotal = 0, paidTotal = 0, remainingTotal = 0;
-            foreach (var order in active)
-            {
-                discountTotal += order.Discount;
-                amountTotal += order.Total;
-                paidTotal += order.PaidAmount;
-                remainingTotal += order.RemainingBalance;
+                returnedTotal += order.Total;
                 AppendRow(sb, order.InvoiceNumber, order.Customer.Name, order.Customer.PhoneNumber ?? "",
-                    order.CreatedAt.ToString("yyyy-MM-dd"),
-                    order.DueDate?.ToString("yyyy-MM-dd") ?? "",
-                    order.Discount.ToString("F2"), order.Total.ToString("F2"),
-                    order.PaidAmount.ToString("F2"), order.RemainingBalance.ToString("F2"));
+                    order.CreatedAt.ToString("yyyy-MM-dd"), order.Total.ToString("F2"));
             }
-            AppendRow(sb, "الإجمالي العام", "", "", "", "", discountTotal.ToString("F2"),
-                amountTotal.ToString("F2"), paidTotal.ToString("F2"), remainingTotal.ToString("F2"));
+            AppendRow(sb, "الإجمالي العام", "", "", "", returnedTotal.ToString("F2"));
             sb.Append("\r\n");
         }
 
-        if (includeCustomers)
+        AppendRow(sb, "الفواتير");
+        AppendRow(sb, "رقم الفاتورة", "العميل", "رقم الهاتف", "تاريخ الإصدار", "تاريخ الاستحقاق",
+            "الحالة", "الخصم", "الإجمالي", "المدفوع", "المتبقي");
+        decimal discountTotal = 0, amountTotal = 0, paidTotal = 0, remainingTotal = 0;
+        foreach (var order in active)
         {
-            AppendRow(sb, "العملاء");
-            AppendRow(sb, "الاسم", "اسم المتجر", "رقم الهاتف", "الشارع", "المدينة", "تاريخ الإضافة");
-            foreach (var customer in customers)
-            {
-                AppendRow(sb, customer.Name, customer.StoreName ?? "", customer.PhoneNumber ?? "",
-                    customer.Street ?? "", customer.City ?? "", customer.CreatedAt.ToString("yyyy-MM-dd"));
-            }
-            sb.Append("\r\n");
+            var remaining = EffectiveRemaining(order);
+            discountTotal += order.Discount;
+            amountTotal += order.Total;
+            paidTotal += order.PaidAmount;
+            remainingTotal += remaining;
+            AppendRow(sb, order.InvoiceNumber, order.Customer.Name, order.Customer.PhoneNumber ?? "",
+                order.CreatedAt.ToString("yyyy-MM-dd"),
+                order.DueDate?.ToString("yyyy-MM-dd") ?? "",
+                StatusLabel(order, today),
+                order.Discount.ToString("F2"), order.Total.ToString("F2"),
+                order.PaidAmount.ToString("F2"), remaining.ToString("F2"));
         }
+        AppendRow(sb, "الإجمالي العام", "", "", "", "", "", discountTotal.ToString("F2"),
+            amountTotal.ToString("F2"), paidTotal.ToString("F2"), remainingTotal.ToString("F2"));
+        sb.Append("\r\n");
 
-        if (includeItems)
+        AppendDebtsSection(sb, orders, receipts);
+
+        AppendRow(sb, "العملاء");
+        AppendRow(sb, "الاسم", "اسم المتجر", "رقم الهاتف", "الشارع", "المدينة", "تاريخ الإضافة");
+        foreach (var customer in customers)
         {
-            AppendRow(sb, "الأصناف");
-            AppendRow(sb, "الاسم", "الوصف", "سعر الشراء", "سعر البيع");
-            foreach (var product in products)
-            {
-                AppendRow(sb, product.Name, product.Description ?? "",
-                    product.PurchasePrice.ToString("F2"), product.SellPrice.ToString("F2"));
-            }
+            AppendRow(sb, customer.Name, customer.StoreName ?? "", customer.PhoneNumber ?? "",
+                customer.Street ?? "", customer.City ?? "", customer.CreatedAt.ToString("yyyy-MM-dd"));
+        }
+        sb.Append("\r\n");
+
+        AppendRow(sb, "الأصناف");
+        AppendRow(sb, "الاسم", "الوصف", "سعر الشراء", "سعر البيع");
+        foreach (var product in products)
+        {
+            AppendRow(sb, product.Name, product.Description ?? "",
+                product.PurchasePrice.ToString("F2"), product.SellPrice.ToString("F2"));
         }
 
         return sb.ToString();
+    }
+
+    // Nets each customer's outstanding balance against their general
+    // receipts (a payment against the customer's total debt, not any one
+    // invoice - see Receipt.cs), floored at 0 - mirrors DataExportService's
+    // "ديون العملاء" section on the frontend exactly.
+    private static void AppendDebtsSection(StringBuilder sb, List<Order> orders, List<Receipt> receipts)
+    {
+        var receivedByCustomer = receipts
+            .GroupBy(r => r.CustomerId)
+            .ToDictionary(g => g.Key, g => g.Sum(r => r.Amount));
+
+        var debts = orders
+            .Where(o => !o.CoveredByReceipt && o.RemainingBalance > DebtTolerance)
+            .GroupBy(o => o.CustomerId)
+            .Select(g =>
+            {
+                var received = receivedByCustomer.GetValueOrDefault(g.Key, 0m);
+                var netAmount = Math.Max(0, g.Sum(o => o.RemainingBalance) - received);
+                return new
+                {
+                    Name = g.First().Customer.Name,
+                    Phone = g.First().Customer.PhoneNumber ?? "",
+                    UnpaidInvoiceCount = g.Count(),
+                    Amount = netAmount
+                };
+            })
+            .Where(d => d.Amount > DebtTolerance)
+            .OrderByDescending(d => d.Amount)
+            .ToList();
+
+        AppendRow(sb, "ديون العملاء");
+        AppendRow(sb, "العميل", "رقم الهاتف", "عدد الفواتير غير المسددة", "إجمالي المستحق");
+        decimal totalDebt = 0;
+        foreach (var debt in debts)
+        {
+            totalDebt += debt.Amount;
+            AppendRow(sb, debt.Name, debt.Phone, debt.UnpaidInvoiceCount.ToString(), debt.Amount.ToString("F2"));
+        }
+        AppendRow(sb, "الإجمالي العام", "", "", totalDebt.ToString("F2"));
+        sb.Append("\r\n");
     }
 
     private static void AppendRow(StringBuilder sb, params string[] fields)
