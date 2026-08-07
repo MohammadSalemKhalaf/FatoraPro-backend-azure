@@ -27,6 +27,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<SubAdmin> SubAdmins { get; set; }
     public DbSet<SubAdminRefreshToken> SubAdminRefreshTokens { get; set; }
     public DbSet<SupportContact> SupportContacts { get; set; }
+    public DbSet<SubscriptionActivation> SubscriptionActivations { get; set; }
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

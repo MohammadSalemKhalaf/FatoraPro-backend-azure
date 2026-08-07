@@ -119,6 +119,18 @@ public class UserService(AppDbContext dbContext, IPasswordHasherService password
         // a previous Custom activation.
         user.CustomMonths = request.SubscriptionType == SubscriptionType.Custom ? request.CustomMonths : null;
 
+        // One row per activation, regardless of who performed it - see
+        // SubscriptionActivation.cs for why (UpdateSubscriptionAsync itself
+        // has no other history).
+        dbContext.SubscriptionActivations.Add(new SubscriptionActivation
+        {
+            UserId = user.Id,
+            SubscriptionType = request.SubscriptionType,
+            CustomMonths = user.CustomMonths,
+            PerformedBySubAdminId = actingSubAdminId,
+            ActivatedAt = start
+        });
+
         await dbContext.SaveChangesAsync();
 
         return ToAdminResponse(user);
