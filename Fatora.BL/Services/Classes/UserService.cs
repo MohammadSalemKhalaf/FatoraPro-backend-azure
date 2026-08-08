@@ -303,8 +303,13 @@ public class UserService(AppDbContext dbContext, IPasswordHasherService password
         await dbContext.SaveChangesAsync();
     }
 
-    public async Task ResetPasswordAsync(Guid userId, string newPassword)
+    public async Task ResetPasswordAsync(Guid userId, string newPassword, Guid? actingSubAdminId = null)
     {
+        if (actingSubAdminId is not null)
+        {
+            await EnsureSubAdminCanManageAccountAsync(actingSubAdminId.Value);
+        }
+
         var user = await FindUser(userId);
 
         user.Password = passwordHasher.Hash(user, newPassword);
@@ -315,8 +320,13 @@ public class UserService(AppDbContext dbContext, IPasswordHasherService password
         await dbContext.SaveChangesAsync();
     }
 
-    public async Task SuspendAsync(Guid userId)
+    public async Task SuspendAsync(Guid userId, Guid? actingSubAdminId = null)
     {
+        if (actingSubAdminId is not null)
+        {
+            await EnsureSubAdminCanManageAccountAsync(actingSubAdminId.Value);
+        }
+
         var user = await FindUser(userId);
 
         user.IsActive = false;
@@ -327,12 +337,36 @@ public class UserService(AppDbContext dbContext, IPasswordHasherService password
         await dbContext.SaveChangesAsync();
     }
 
-    public async Task ActivateAsync(Guid userId)
+    public async Task ActivateAsync(Guid userId, Guid? actingSubAdminId = null)
     {
+        if (actingSubAdminId is not null)
+        {
+            await EnsureSubAdminCanManageAccountAsync(actingSubAdminId.Value);
+        }
+
         var user = await FindUser(userId);
 
         user.IsActive = true;
         await dbContext.SaveChangesAsync();
+    }
+
+    // Mirrors EnsureSubAdminCanActivateAsync's shape - suspending/reactivating
+    // and resetting a subscriber's password share one combined flag (see
+    // SubAdmin.CanManageAccount) rather than two separate ones, since both
+    // are "account management" actions the top Admin grants/revokes as a
+    // unit. The top Admin (actingSubAdminId null) always bypasses this.
+    private async Task EnsureSubAdminCanManageAccountAsync(Guid subAdminId)
+    {
+        var subAdmin = await dbContext.SubAdmins.FirstOrDefaultAsync(s => s.Id == subAdminId);
+        if (subAdmin is null)
+        {
+            throw new NotFoundException(nameof(SubAdmin), subAdminId);
+        }
+
+        if (!subAdmin.CanManageAccount)
+        {
+            throw new ForbiddenException("You are not permitted to manage this subscriber's account.");
+        }
     }
 
     // A one-way switch for now - see User.IsSalesManager. Idempotent:

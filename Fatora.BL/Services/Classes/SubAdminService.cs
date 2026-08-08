@@ -119,6 +119,7 @@ public class SubAdminService(AppDbContext dbContext) : ISubAdminService
         subAdmin.CanActivateMonthly = request.CanActivateMonthly;
         subAdmin.CanActivateAnnual = request.CanActivateAnnual;
         subAdmin.CanActivateCustomMonths = request.CanActivateCustomMonths;
+        subAdmin.CanManageAccount = request.CanManageAccount;
         await dbContext.SaveChangesAsync();
         return ToResponse(subAdmin, includeQrToken: false);
     }
@@ -147,6 +148,7 @@ public class SubAdminService(AppDbContext dbContext) : ISubAdminService
         CanActivateMonthly = subAdmin.CanActivateMonthly,
         CanActivateAnnual = subAdmin.CanActivateAnnual,
         CanActivateCustomMonths = subAdmin.CanActivateCustomMonths,
+        CanManageAccount = subAdmin.CanManageAccount,
         CreatedAt = subAdmin.CreatedAt
     };
 }

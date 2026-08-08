@@ -9,16 +9,17 @@ using Microsoft.AspNetCore.Mvc;
 namespace Fatora.API.Controllers;
 
 // Class-level "Admin,SubAdmin" (broadest) with every action narrowed back
-// down to "Admin" except GetUsers and UpdateSubscription - multiple
-// [Authorize] attributes AND their role sets together rather than the
-// method-level one overriding the class-level one, so a narrow class-level
-// restriction can never be "widened" by a broader method-level attribute.
-// Same pattern as RepsController/SubAdminsController. Creating subscribers,
-// suspending, and resetting passwords all stay Admin-exclusive, per the
-// confirmed "activation-only" permission scope - GetUsers is safe to open
-// up because it auto-scopes a SubAdmin caller to its own claimed
-// subscribers (see GetUsersAsync), and UpdateSubscription is gated per-call
-// by that SubAdmin's own granted CanActivate* flags.
+// down to "Admin" except GetUsers, UpdateSubscription, Suspend, Activate,
+// and ResetPassword - multiple [Authorize] attributes AND their role sets
+// together rather than the method-level one overriding the class-level one,
+// so a narrow class-level restriction can never be "widened" by a broader
+// method-level attribute. Same pattern as RepsController/SubAdminsController.
+// Creating subscribers stays Admin-exclusive. GetUsers is safe to open up
+// because it auto-scopes a SubAdmin caller to its own claimed subscribers
+// (see GetUsersAsync); UpdateSubscription is gated per-call by that
+// SubAdmin's own granted CanActivate* flags; Suspend/Activate/ResetPassword
+// are gated per-call by its CanManageAccount flag (see
+// UserService.EnsureSubAdminCanManageAccountAsync).
 [Route("api/[controller]")]
 [ApiController]
 [Authorize(Roles = "Admin,SubAdmin")]
@@ -55,19 +56,19 @@ public class UsersController(
         return StatusCode(StatusCodes.Status201Created, result);
     }
 
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,SubAdmin")]
     [HttpPost("{id:guid}/suspend")]
     public async Task<IActionResult> Suspend(Guid id)
     {
-        await userService.SuspendAsync(id);
+        await userService.SuspendAsync(id, User.GetSubAdminIdOrNull());
         return NoContent();
     }
 
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,SubAdmin")]
     [HttpPost("{id:guid}/activate")]
     public async Task<IActionResult> Activate(Guid id)
     {
-        await userService.ActivateAsync(id);
+        await userService.ActivateAsync(id, User.GetSubAdminIdOrNull());
         return NoContent();
     }
 
@@ -85,7 +86,7 @@ public class UsersController(
         return Ok(result);
     }
 
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,SubAdmin")]
     [HttpPost("{id:guid}/reset-password")]
     public async Task<IActionResult> ResetPassword(Guid id, ResetPasswordRequest request)
     {
@@ -95,7 +96,7 @@ public class UsersController(
             return BadRequest(validationResult.Errors);
         }
 
-        await userService.ResetPasswordAsync(id, request.NewPassword);
+        await userService.ResetPasswordAsync(id, request.NewPassword, User.GetSubAdminIdOrNull());
         return NoContent();
     }
 }
