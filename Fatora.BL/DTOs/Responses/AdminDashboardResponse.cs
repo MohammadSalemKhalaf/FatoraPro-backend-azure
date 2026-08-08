@@ -31,6 +31,13 @@ public class SubAdminBreakdownResponse
     // Always the literal last 10, regardless of the selected period - a
     // distinct concept from Platform.ActivationsInPeriod.
     public List<RecentActivationResponse> RecentActivations { get; set; } = [];
+
+    // Also always the literal last/soonest 10, independent of the period
+    // filter - both projected off the same already-loaded managed-subscriber
+    // list (see AdminReportService.BuildSubAdminBreakdownAsync), no extra
+    // query.
+    public List<RecentSubscriberResponse> RecentlyJoined { get; set; } = [];
+    public List<ExpiringSubscriberResponse> ExpiringSoon { get; set; } = [];
 }
 
 public class RecentActivationResponse
@@ -41,4 +48,20 @@ public class RecentActivationResponse
     public string SubscriptionType { get; set; } = string.Empty;
     public int? CustomMonths { get; set; }
     public DateTime ActivatedAt { get; set; }
+}
+
+public class RecentSubscriberResponse
+{
+    public Guid Id { get; set; }
+    public string UserName { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
+}
+
+public class ExpiringSubscriberResponse
+{
+    public Guid Id { get; set; }
+    public string UserName { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public DateTime SubscriptionEnd { get; set; }
 }

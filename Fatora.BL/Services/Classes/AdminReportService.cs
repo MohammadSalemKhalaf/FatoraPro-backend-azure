@@ -105,7 +105,30 @@ public class AdminReportService(AppDbContext dbContext) : IAdminReportService
             SubscriptionTypeBreakdown = managedSubscribers
                 .GroupBy(u => u.SubscriptionType.ToString())
                 .ToDictionary(g => g.Key, g => g.Count()),
-            RecentActivations = recentActivations
+            RecentActivations = recentActivations,
+            RecentlyJoined = managedSubscribers
+                .OrderByDescending(u => u.CreatedAt)
+                .Take(RecentActivationsCount)
+                .Select(u => new RecentSubscriberResponse
+                {
+                    Id = u.Id,
+                    UserName = u.UserName,
+                    Name = u.Name,
+                    CreatedAt = u.CreatedAt
+                })
+                .ToList(),
+            ExpiringSoon = managedSubscribers
+                .Where(u => u.SubscriptionEnd != null && u.SubscriptionEnd > DateTime.UtcNow)
+                .OrderBy(u => u.SubscriptionEnd)
+                .Take(RecentActivationsCount)
+                .Select(u => new ExpiringSubscriberResponse
+                {
+                    Id = u.Id,
+                    UserName = u.UserName,
+                    Name = u.Name,
+                    SubscriptionEnd = u.SubscriptionEnd!.Value
+                })
+                .ToList()
         };
     }
 
