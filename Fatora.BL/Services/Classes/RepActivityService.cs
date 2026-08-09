@@ -124,7 +124,9 @@ public class RepActivityService(AppDbContext dbContext) : IRepActivityService
                 CustomerName = o.Customer.Name,
                 Detail = o.InvoiceNumber,
                 Amount = o.Total,
-                CreatedAt = o.CreatedAt
+                CreatedAt = o.CreatedAt,
+                Latitude = o.Latitude,
+                Longitude = o.Longitude
             })
             .Concat(
                 receipts.Select(r => new RepActivityItemResponse
@@ -136,7 +138,9 @@ public class RepActivityService(AppDbContext dbContext) : IRepActivityService
                     CustomerName = r.Customer.Name,
                     Detail = string.Empty,
                     Amount = r.Amount,
-                    CreatedAt = r.CreatedAt
+                    CreatedAt = r.CreatedAt,
+                    Latitude = r.Latitude,
+                    Longitude = r.Longitude
                 })
             )
             .OrderByDescending(item => item.CreatedAt)
