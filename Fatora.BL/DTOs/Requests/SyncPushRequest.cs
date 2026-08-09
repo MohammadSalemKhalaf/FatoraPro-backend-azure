@@ -45,7 +45,13 @@ public sealed record OrderSyncItem(
     [Range(0, double.MaxValue)] decimal CashDiscount = 0m,
     bool CoveredByReceipt = false,
     bool IsReturned = false,
-    bool IsDeleted = false
+    bool IsDeleted = false,
+    // Device-captured GPS at creation time - null when location permission
+    // was never granted or the device was offline that moment. Only ever
+    // applied on first creation, never on a later edit-sync - see
+    // SyncService.PushOrderAsync.
+    double? Latitude = null,
+    double? Longitude = null
 );
 
 public sealed record OrderItemSyncItem(
@@ -59,5 +65,8 @@ public sealed record ReceiptSyncItem(
     [Required] Guid CustomerId,
     [Range(0.01, double.MaxValue)] decimal Amount,
     bool IsActive,
-    DateTime UpdatedAt
+    DateTime UpdatedAt,
+    // See OrderSyncItem.Latitude/Longitude - same reasoning.
+    double? Latitude = null,
+    double? Longitude = null
 );

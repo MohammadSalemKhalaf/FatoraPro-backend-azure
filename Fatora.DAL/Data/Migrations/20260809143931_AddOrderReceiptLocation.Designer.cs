@@ -3,6 +3,7 @@ using System;
 using Fatora.DAL.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Fatora.DAL.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260809143931_AddOrderReceiptLocation")]
+    partial class AddOrderReceiptLocation
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -332,68 +335,6 @@ namespace Fatora.DAL.Data.Migrations
                     b.HasIndex("UserId", "UpdatedAt");
 
                     b.ToTable("Products");
-                });
-
-            modelBuilder.Entity("Fatora.DAL.Entites.PurchaseRequest", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("CreatedByRepId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("CustomerId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("InvoiceId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Notes")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CreatedByRepId");
-
-                    b.HasIndex("UserId", "UpdatedAt");
-
-                    b.ToTable("PurchaseRequests");
-                });
-
-            modelBuilder.Entity("Fatora.DAL.Entites.PurchaseRequestItem", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("ProductId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("PurchaseRequestId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("Quantity")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PurchaseRequestId");
-
-                    b.ToTable("PurchaseRequestItems");
                 });
 
             modelBuilder.Entity("Fatora.DAL.Entites.Receipt", b =>
@@ -943,27 +884,6 @@ namespace Fatora.DAL.Data.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("Fatora.DAL.Entites.PurchaseRequest", b =>
-                {
-                    b.HasOne("Fatora.DAL.Entites.Rep", "CreatedByRep")
-                        .WithMany()
-                        .HasForeignKey("CreatedByRepId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("CreatedByRep");
-                });
-
-            modelBuilder.Entity("Fatora.DAL.Entites.PurchaseRequestItem", b =>
-                {
-                    b.HasOne("Fatora.DAL.Entites.PurchaseRequest", "PurchaseRequest")
-                        .WithMany("Items")
-                        .HasForeignKey("PurchaseRequestId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("PurchaseRequest");
-                });
-
             modelBuilder.Entity("Fatora.DAL.Entites.Receipt", b =>
                 {
                     b.HasOne("Fatora.DAL.Entites.Rep", "CreatedByRep")
@@ -1107,11 +1027,6 @@ namespace Fatora.DAL.Data.Migrations
             modelBuilder.Entity("Fatora.DAL.Entites.Product", b =>
                 {
                     b.Navigation("Products");
-                });
-
-            modelBuilder.Entity("Fatora.DAL.Entites.PurchaseRequest", b =>
-                {
-                    b.Navigation("Items");
                 });
 
             modelBuilder.Entity("Fatora.DAL.Entities.User", b =>

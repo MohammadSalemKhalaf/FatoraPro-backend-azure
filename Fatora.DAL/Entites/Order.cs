@@ -79,4 +79,11 @@ public class Order : ISyncableEntity
     // Never set on delete/reassignment - see Rep.cs.
     public Guid? CreatedByRepId { get; set; }
     public Rep? CreatedByRep { get; set; }
+
+    // Captured on the device at the moment this invoice was created (see
+    // SyncService.PushOrderAsync) - null when location permission was never
+    // granted or the device was offline at that moment. Set once, at
+    // creation, and never overwritten by a later edit-sync.
+    public double? Latitude { get; set; }
+    public double? Longitude { get; set; }
 }

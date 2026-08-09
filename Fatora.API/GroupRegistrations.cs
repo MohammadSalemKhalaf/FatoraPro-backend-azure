@@ -33,6 +33,7 @@ public static class GroupRegistrations
         Services.AddScoped<IRepService, RepService>();
         Services.AddScoped<IRepAuthService, RepAuthService>();
         Services.AddScoped<IPendingRepSyncService, PendingRepSyncService>();
+        Services.AddScoped<IRepActivityService, RepActivityService>();
         Services.AddScoped<IAnnualInventoryService, AnnualInventoryService>();
         Services.AddScoped<ISubAdminService, SubAdminService>();
         Services.AddScoped<ISubAdminAuthService, SubAdminAuthService>();

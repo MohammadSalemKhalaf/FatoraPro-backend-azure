@@ -227,6 +227,8 @@ public class SyncService(AppDbContext dbContext) : ISyncService
                     IsDeleted = scopeToRepId is null && item.IsDeleted,
                     CreatedAt = item.UpdatedAt,
                     UpdatedAt = item.UpdatedAt,
+                    Latitude = item.Latitude,
+                    Longitude = item.Longitude,
                     OrderItems = item.Items.Select(i => new OrderItem
                     {
                         ProductId = i.ProductId,
@@ -305,10 +307,16 @@ public class SyncService(AppDbContext dbContext) : ISyncService
 
             // Mirrors OrderService.UpdateAsync's same rule - the client is expected to block this
             // locally before it ever reaches here (see OrdersRepository.update), so this is a
-            // backstop against a stale/offline edit that started before the order was marked paid.
-            if (OrderService.ComputeStatus(existing, DateOnly.FromDateTime(DateTime.UtcNow)) == "Paid")
+            // backstop against a stale/offline edit that started before the order received a
+            // payment or was covered by a receipt.
+            if (existing.CoveredByReceipt)
             {
-                return new SyncItemResult(item.Id, "Rejected", "Cannot edit an invoice that has already been paid in full.");
+                return new SyncItemResult(item.Id, "Rejected", "Cannot edit an invoice covered by a receipt - return it instead.");
+            }
+
+            if (existing.PaidAmount > 0)
+            {
+                return new SyncItemResult(item.Id, "Rejected", "Cannot edit an invoice that has received a payment - return it instead.");
             }
 
             var newCustomer = await FindVisibleCustomerAsync(userId, item.CustomerId, scopeToRepId);
@@ -337,6 +345,10 @@ public class SyncService(AppDbContext dbContext) : ISyncService
             existing.PaidAmount = item.PaidAmount;
             existing.CoveredByReceipt = item.CoveredByReceipt;
             existing.UpdatedAt = item.UpdatedAt;
+            // Latitude/Longitude deliberately untouched here - location is
+            // "where was I when I made this," captured once at true
+            // creation time (see the create branch above), never
+            // overwritten by a later edit-sync of the same order.
 
             if (isEdit)
             {
@@ -426,7 +438,9 @@ public class SyncService(AppDbContext dbContext) : ISyncService
                     UserId = userId,
                     CreatedByRepId = scopeToRepId,
                     CreatedAt = item.UpdatedAt,
-                    UpdatedAt = item.UpdatedAt
+                    UpdatedAt = item.UpdatedAt,
+                    Latitude = item.Latitude,
+                    Longitude = item.Longitude
                 });
 
                 await dbContext.SaveChangesAsync();
@@ -441,6 +455,8 @@ public class SyncService(AppDbContext dbContext) : ISyncService
             existing.Amount = item.Amount;
             existing.IsActive = item.IsActive;
             existing.UpdatedAt = item.UpdatedAt;
+            // Latitude/Longitude deliberately untouched here - see the
+            // identical comment in PushOrderAsync's edit branch.
 
             await dbContext.SaveChangesAsync();
             return new SyncItemResult(item.Id, "Applied");
