@@ -28,6 +28,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<SubAdminRefreshToken> SubAdminRefreshTokens { get; set; }
     public DbSet<SupportContact> SupportContacts { get; set; }
     public DbSet<SubscriptionActivation> SubscriptionActivations { get; set; }
+    public DbSet<PurchaseRequest> PurchaseRequests { get; set; }
+    public DbSet<PurchaseRequestItem> PurchaseRequestItems { get; set; }
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
