@@ -118,9 +118,23 @@ public class OrderService(AppDbContext dbContext) : IOrderService
             throw new BadRequestException("Cannot edit an invoice that has been marked as returned.");
         }
 
-        if (ComputeStatus(order, DateOnly.FromDateTime(DateTime.UtcNow)) == "Paid")
+        // Once any money has moved against this invoice (a partial or full
+        // payment) or it's been administratively covered by a receipt, it's
+        // final - the only way to unwind it is a return, which restores
+        // stock and clears the balance in one dedicated step instead of
+        // silently re-pricing an invoice a payment already refers to.
+        // Deliberately not status-based: ComputeStatus prioritizes
+        // "Overdue" over "PartiallyPaid" for a late-but-partially-paid
+        // invoice, so checking PaidAmount directly is what actually catches
+        // every case a status string alone would miss.
+        if (order.CoveredByReceipt)
         {
-            throw new BadRequestException("Cannot edit an invoice that has already been paid in full.");
+            throw new BadRequestException("Cannot edit an invoice covered by a receipt - return it instead.");
+        }
+
+        if (order.PaidAmount > 0)
+        {
+            throw new BadRequestException("Cannot edit an invoice that has received a payment - return it instead.");
         }
 
         var customer = await FindOwnedActiveCustomer(userId, request.CustomerId, scopeToRepId);

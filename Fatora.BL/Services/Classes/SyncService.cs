@@ -307,10 +307,16 @@ public class SyncService(AppDbContext dbContext) : ISyncService
 
             // Mirrors OrderService.UpdateAsync's same rule - the client is expected to block this
             // locally before it ever reaches here (see OrdersRepository.update), so this is a
-            // backstop against a stale/offline edit that started before the order was marked paid.
-            if (OrderService.ComputeStatus(existing, DateOnly.FromDateTime(DateTime.UtcNow)) == "Paid")
+            // backstop against a stale/offline edit that started before the order received a
+            // payment or was covered by a receipt.
+            if (existing.CoveredByReceipt)
             {
-                return new SyncItemResult(item.Id, "Rejected", "Cannot edit an invoice that has already been paid in full.");
+                return new SyncItemResult(item.Id, "Rejected", "Cannot edit an invoice covered by a receipt - return it instead.");
+            }
+
+            if (existing.PaidAmount > 0)
+            {
+                return new SyncItemResult(item.Id, "Rejected", "Cannot edit an invoice that has received a payment - return it instead.");
             }
 
             var newCustomer = await FindVisibleCustomerAsync(userId, item.CustomerId, scopeToRepId);
