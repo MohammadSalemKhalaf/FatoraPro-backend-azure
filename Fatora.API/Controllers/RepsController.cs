@@ -178,6 +178,17 @@ public class RepsController(
         return Ok(result);
     }
 
+    // Every rep-created Order/Receipt from the last rolling 24 hours,
+    // newest first - the owner's quick "what's my sales team been doing"
+    // glance.
+    [Authorize(Roles = "SalesRep")]
+    [HttpGet("activity-feed")]
+    public async Task<IActionResult> GetActivityFeed()
+    {
+        var result = await repActivityService.GetActivityFeedAsync(User.GetUserId());
+        return Ok(result);
+    }
+
     // A rep has no username/password to authenticate with at this point -
     // this is the one action on this controller anyone can call before
     // being signed in at all.

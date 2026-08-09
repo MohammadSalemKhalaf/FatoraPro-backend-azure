@@ -90,6 +90,59 @@ public class RepActivityService(AppDbContext dbContext) : IRepActivityService
         return new RepRouteResponse { Points = points, UnlocatedCount = unlocatedCount };
     }
 
+    public async Task<List<RepActivityItemResponse>> GetActivityFeedAsync(Guid ownerUserId)
+    {
+        var since = DateTime.UtcNow.AddHours(-24);
+
+        // Loaded with Includes and mapped client-side (not a direct
+        // .Select(... => new RepActivityItemResponse { Amount = o.Total })
+        // projection) because Order.Total is a computed property built from
+        // OrderItems/Math.Round, the same reason OrderService.ToResponse
+        // materializes entities first - see that method.
+        var orders = await dbContext.Orders
+            .AsNoTracking()
+            .Include(o => o.OrderItems)
+            .Include(o => o.Customer)
+            .Include(o => o.CreatedByRep)
+            .Where(o => o.UserId == ownerUserId && o.CreatedByRepId != null && o.CreatedAt >= since)
+            .ToListAsync();
+
+        var receipts = await dbContext.Receipts
+            .AsNoTracking()
+            .Include(r => r.Customer)
+            .Include(r => r.CreatedByRep)
+            .Where(r => r.UserId == ownerUserId && r.CreatedByRepId != null && r.IsActive && r.CreatedAt >= since)
+            .ToListAsync();
+
+        return orders
+            .Select(o => new RepActivityItemResponse
+            {
+                Id = o.Id,
+                RepId = o.CreatedByRepId!.Value,
+                RepName = o.CreatedByRep!.Name,
+                Type = "Order",
+                CustomerName = o.Customer.Name,
+                Detail = o.InvoiceNumber,
+                Amount = o.Total,
+                CreatedAt = o.CreatedAt
+            })
+            .Concat(
+                receipts.Select(r => new RepActivityItemResponse
+                {
+                    Id = r.Id,
+                    RepId = r.CreatedByRepId!.Value,
+                    RepName = r.CreatedByRep!.Name,
+                    Type = "Receipt",
+                    CustomerName = r.Customer.Name,
+                    Detail = string.Empty,
+                    Amount = r.Amount,
+                    CreatedAt = r.CreatedAt
+                })
+            )
+            .OrderByDescending(item => item.CreatedAt)
+            .ToList();
+    }
+
     private async Task EnsureOwnedRepAsync(Guid ownerUserId, Guid repId)
     {
         var owned = await dbContext.Reps.AnyAsync(r => r.Id == repId && r.OwnerUserId == ownerUserId);
