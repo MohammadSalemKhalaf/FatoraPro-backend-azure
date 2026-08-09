@@ -21,6 +21,7 @@ public class RepsController(
     IRepService repService,
     IRepAuthService repAuthService,
     IPendingRepSyncService pendingRepSyncService,
+    IRepActivityService repActivityService,
     CreateRepRequestValidator createRepValidator) : ControllerBase
 {
     [Authorize(Roles = "SalesRep")]
@@ -165,6 +166,16 @@ public class RepsController(
     {
         await pendingRepSyncService.DiscardAsync(User.GetUserId(), id);
         return NoContent();
+    }
+
+    // That day's located Orders/Receipts for this rep, in chronological
+    // order - the numbered, connected route the owner sees on the map.
+    [Authorize(Roles = "SalesRep")]
+    [HttpGet("{id:guid}/route")]
+    public async Task<IActionResult> GetRoute(Guid id, [FromQuery] DateOnly date)
+    {
+        var result = await repActivityService.GetRouteAsync(User.GetUserId(), id, date);
+        return Ok(result);
     }
 
     // A rep has no username/password to authenticate with at this point -
