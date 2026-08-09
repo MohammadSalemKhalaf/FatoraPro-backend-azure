@@ -33,6 +33,8 @@ public class ReceiptService(AppDbContext dbContext) : IReceiptService
         IsActive = receipt.IsActive,
         CreatedAt = receipt.CreatedAt,
         UpdatedAt = receipt.UpdatedAt,
-        CreatedByRepId = receipt.CreatedByRepId
+        CreatedByRepId = receipt.CreatedByRepId,
+        Latitude = receipt.Latitude,
+        Longitude = receipt.Longitude
     };
 }

@@ -227,6 +227,8 @@ public class SyncService(AppDbContext dbContext) : ISyncService
                     IsDeleted = scopeToRepId is null && item.IsDeleted,
                     CreatedAt = item.UpdatedAt,
                     UpdatedAt = item.UpdatedAt,
+                    Latitude = item.Latitude,
+                    Longitude = item.Longitude,
                     OrderItems = item.Items.Select(i => new OrderItem
                     {
                         ProductId = i.ProductId,
@@ -337,6 +339,10 @@ public class SyncService(AppDbContext dbContext) : ISyncService
             existing.PaidAmount = item.PaidAmount;
             existing.CoveredByReceipt = item.CoveredByReceipt;
             existing.UpdatedAt = item.UpdatedAt;
+            // Latitude/Longitude deliberately untouched here - location is
+            // "where was I when I made this," captured once at true
+            // creation time (see the create branch above), never
+            // overwritten by a later edit-sync of the same order.
 
             if (isEdit)
             {
@@ -426,7 +432,9 @@ public class SyncService(AppDbContext dbContext) : ISyncService
                     UserId = userId,
                     CreatedByRepId = scopeToRepId,
                     CreatedAt = item.UpdatedAt,
-                    UpdatedAt = item.UpdatedAt
+                    UpdatedAt = item.UpdatedAt,
+                    Latitude = item.Latitude,
+                    Longitude = item.Longitude
                 });
 
                 await dbContext.SaveChangesAsync();
@@ -441,6 +449,8 @@ public class SyncService(AppDbContext dbContext) : ISyncService
             existing.Amount = item.Amount;
             existing.IsActive = item.IsActive;
             existing.UpdatedAt = item.UpdatedAt;
+            // Latitude/Longitude deliberately untouched here - see the
+            // identical comment in PushOrderAsync's edit branch.
 
             await dbContext.SaveChangesAsync();
             return new SyncItemResult(item.Id, "Applied");

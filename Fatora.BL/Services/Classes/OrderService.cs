@@ -533,6 +533,8 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         IsReturned = order.IsReturned,
         IsDeleted = order.IsDeleted,
         CreatedByRepId = order.CreatedByRepId,
+        Latitude = order.Latitude,
+        Longitude = order.Longitude,
         Items = order.OrderItems.Select(oi => new OrderItemResponse
         {
             ProductId = oi.ProductId,

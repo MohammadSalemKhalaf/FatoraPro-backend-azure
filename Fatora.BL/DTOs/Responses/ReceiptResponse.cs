@@ -13,4 +13,9 @@ public class ReceiptResponse
     // field for why this needs to reach the client at all (rep-scoped local
     // filtering for the owner's own "filter by rep" view).
     public Guid? CreatedByRepId { get; set; }
+
+    // Null when location permission was never granted or the device was
+    // offline at creation time - see Receipt.Latitude/Longitude.
+    public double? Latitude { get; set; }
+    public double? Longitude { get; set; }
 }
