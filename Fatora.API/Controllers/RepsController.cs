@@ -170,11 +170,15 @@ public class RepsController(
 
     // That day's located Orders/Receipts for this rep, in chronological
     // order - the numbered, connected route the owner sees on the map.
+    // start/end are explicit UTC instants for the caller's local calendar
+    // day (computed client-side, see reps_repository.dart's getRoute) -
+    // not a bare date, since this server can't know the caller's timezone
+    // on its own.
     [Authorize(Roles = "SalesRep")]
     [HttpGet("{id:guid}/route")]
-    public async Task<IActionResult> GetRoute(Guid id, [FromQuery] DateOnly date)
+    public async Task<IActionResult> GetRoute(Guid id, [FromQuery] DateTime start, [FromQuery] DateTime end)
     {
-        var result = await repActivityService.GetRouteAsync(User.GetUserId(), id, date);
+        var result = await repActivityService.GetRouteAsync(User.GetUserId(), id, start, end);
         return Ok(result);
     }
 

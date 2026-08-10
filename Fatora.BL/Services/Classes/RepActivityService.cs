@@ -9,17 +9,23 @@ namespace Fatora.BL.Services.Classes;
 
 public class RepActivityService(AppDbContext dbContext) : IRepActivityService
 {
-    public async Task<RepRouteResponse> GetRouteAsync(Guid ownerUserId, Guid repId, DateOnly date)
+    public async Task<RepRouteResponse> GetRouteAsync(
+        Guid ownerUserId,
+        Guid repId,
+        DateTime startUtc,
+        DateTime endUtc
+    )
     {
         await EnsureOwnedRepAsync(ownerUserId, repId);
 
         // CreatedAt is `timestamp with time zone` in Postgres - Npgsql
-        // refuses an Unspecified-kind DateTime against it, so the
-        // range bounds need to be explicitly UTC (CreatedAt itself is
-        // always stored as UTC - see every ...CreatedAt = DateTime.UtcNow
+        // refuses an Unspecified-kind DateTime against it, so these need
+        // to be explicitly stamped UTC regardless of how the model binder
+        // parsed the incoming query string (CreatedAt itself is always
+        // stored as UTC - see every ...CreatedAt = DateTime.UtcNow
         // assignment elsewhere in this service layer).
-        var startOfDay = DateTime.SpecifyKind(date.ToDateTime(TimeOnly.MinValue), DateTimeKind.Utc);
-        var endOfDay = startOfDay.AddDays(1);
+        var startOfDay = DateTime.SpecifyKind(startUtc, DateTimeKind.Utc);
+        var endOfDay = DateTime.SpecifyKind(endUtc, DateTimeKind.Utc);
 
         // Not filtered on Order.IsDeleted - that flag only ever hides an
         // invoice from the owner's Invoices list, every other view (reports,
