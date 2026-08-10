@@ -120,6 +120,29 @@ public class RepActivityService(AppDbContext dbContext) : IRepActivityService
             .Where(r => r.UserId == ownerUserId && r.CreatedByRepId != null && r.IsActive && r.CreatedAt >= since)
             .ToListAsync();
 
+        // Only requests actually being worked (preparing/ready) - a draft is
+        // still being built by the rep and isn't activity worth surfacing to
+        // the owner yet. PurchaseRequest has no Customer navigation property
+        // (CustomerId is a bare nullable Guid, and can genuinely be null - a
+        // request doesn't require a customer the way an Order does), so
+        // names are resolved with a separate lookup instead of an Include.
+        var purchaseRequests = await dbContext.PurchaseRequests
+            .AsNoTracking()
+            .Include(pr => pr.CreatedByRep)
+            .Where(pr => pr.UserId == ownerUserId && pr.CreatedByRepId != null && pr.CreatedAt >= since
+                && (pr.Status == "preparing" || pr.Status == "ready"))
+            .ToListAsync();
+
+        var requestCustomerIds = purchaseRequests
+            .Where(pr => pr.CustomerId != null)
+            .Select(pr => pr.CustomerId!.Value)
+            .Distinct()
+            .ToList();
+        var requestCustomerNames = await dbContext.Customers
+            .AsNoTracking()
+            .Where(c => requestCustomerIds.Contains(c.Id))
+            .ToDictionaryAsync(c => c.Id, c => c.Name);
+
         return orders
             .Select(o => new RepActivityItemResponse
             {
@@ -147,6 +170,28 @@ public class RepActivityService(AppDbContext dbContext) : IRepActivityService
                     CreatedAt = r.CreatedAt,
                     Latitude = r.Latitude,
                     Longitude = r.Longitude
+                })
+            )
+            .Concat(
+                purchaseRequests.Select(pr => new RepActivityItemResponse
+                {
+                    Id = pr.Id,
+                    RepId = pr.CreatedByRepId!.Value,
+                    RepName = pr.CreatedByRep!.Name,
+                    Type = "PurchaseRequest",
+                    CustomerName = pr.CustomerId != null &&
+                        requestCustomerNames.TryGetValue(pr.CustomerId.Value, out var customerName)
+                        ? customerName
+                        : "بدون عميل",
+                    // The raw status ("preparing"/"ready") - the client
+                    // already owns the Arabic label mapping for this exact
+                    // enum (see PurchaseRequestStatusLabel), so this stays a
+                    // plain data field rather than pre-formatted text.
+                    Detail = pr.Status,
+                    Amount = 0,
+                    CreatedAt = pr.CreatedAt,
+                    Latitude = null,
+                    Longitude = null
                 })
             )
             .OrderByDescending(item => item.CreatedAt)
