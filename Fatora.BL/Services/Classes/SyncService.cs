@@ -24,7 +24,7 @@ public class SyncService(AppDbContext dbContext) : ISyncService
 
         foreach (var item in request.Products)
         {
-            response.Products.Add(await PushProductAsync(userId, item));
+            response.Products.Add(await PushProductAsync(userId, item, scopeToRepId));
         }
 
         // Orders may reference customers/products from this same batch, so they must be
@@ -130,7 +130,7 @@ public class SyncService(AppDbContext dbContext) : ISyncService
         }
     }
 
-    private async Task<SyncItemResult> PushProductAsync(Guid userId, ProductSyncItem item)
+    private async Task<SyncItemResult> PushProductAsync(Guid userId, ProductSyncItem item, Guid? scopeToRepId)
     {
         try
         {
@@ -150,6 +150,7 @@ public class SyncService(AppDbContext dbContext) : ISyncService
                     StockQuantity = item.StockQuantity,
                     IsActive = item.IsActive,
                     UserId = userId,
+                    CreatedByRepId = scopeToRepId,
                     CreatedAt = item.UpdatedAt,
                     UpdatedAt = item.UpdatedAt
                 });

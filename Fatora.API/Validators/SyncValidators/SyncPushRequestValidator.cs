@@ -3,6 +3,14 @@ using FluentValidation;
 
 namespace Fatora.API.Validators.SyncValidators;
 
+/// Only the whole-request shape rules live here now - a batch that's simply
+/// too large is a legitimate reason to reject the entire request outright.
+/// Per-item data-quality rules (a bad name, a zero price, ...) moved to the
+/// dedicated CustomerSyncItemValidator/ProductSyncItemValidator/
+/// OrderSyncItemValidator/ReceiptSyncItemValidator, validated and filtered
+/// per item in SyncController.Push - one malformed row must not block every
+/// *other* row bundled in the same offline batch, which for a rep syncing
+/// after hours offline can be everything they did all day.
 public class SyncPushRequestValidator : AbstractValidator<SyncPushRequest>
 {
     // A single sync batch is expected to hold a rep's pending offline work (typically tens of
@@ -14,44 +22,6 @@ public class SyncPushRequestValidator : AbstractValidator<SyncPushRequest>
     {
         RuleFor(x => x).Must(HaveAReasonableBatchSize)
             .WithMessage($"A single sync batch cannot exceed {MaxItemsPerBatch} total items. Split into multiple pushes.");
-
-        RuleForEach(x => x.Customers).ChildRules(customer =>
-        {
-            customer.RuleFor(c => c.Id).NotEqual(Guid.Empty);
-            customer.RuleFor(c => c.Name).NotEmpty();
-        });
-
-        RuleForEach(x => x.Products).ChildRules(product =>
-        {
-            product.RuleFor(p => p.Id).NotEqual(Guid.Empty);
-            product.RuleFor(p => p.Name).NotEmpty();
-            product.RuleFor(p => p.SellPrice).GreaterThanOrEqualTo(0);
-            product.RuleFor(p => p.PurchasePrice).GreaterThanOrEqualTo(0);
-        });
-
-        RuleForEach(x => x.Orders).ChildRules(order =>
-        {
-            order.RuleFor(o => o.Id).NotEqual(Guid.Empty);
-            order.RuleFor(o => o.CustomerId).NotEqual(Guid.Empty);
-            order.RuleFor(o => o.Discount).InclusiveBetween(0, 100);
-            order.RuleFor(o => o.CashDiscount).GreaterThanOrEqualTo(0);
-            order.RuleFor(o => o.PaidAmount).GreaterThanOrEqualTo(0);
-            order.RuleFor(o => o.Items).NotEmpty();
-
-            order.RuleForEach(o => o.Items).ChildRules(item =>
-            {
-                item.RuleFor(i => i.ProductId).NotEqual(Guid.Empty);
-                item.RuleFor(i => i.Quantity).GreaterThan(0);
-                item.RuleFor(i => i.UnitPrice).GreaterThan(0);
-            });
-        });
-
-        RuleForEach(x => x.Receipts).ChildRules(receipt =>
-        {
-            receipt.RuleFor(r => r.Id).NotEqual(Guid.Empty);
-            receipt.RuleFor(r => r.CustomerId).NotEqual(Guid.Empty);
-            receipt.RuleFor(r => r.Amount).GreaterThan(0);
-        });
     }
 
     private static bool HaveAReasonableBatchSize(SyncPushRequest request)

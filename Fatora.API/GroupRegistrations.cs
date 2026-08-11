@@ -64,6 +64,10 @@ public static class GroupRegistrations
         Services.AddScoped<DeleteAccountRequestValidator>();
         Services.AddScoped<UpdateProfileRequestValidator>();
         Services.AddScoped<SyncPushRequestValidator>();
+        Services.AddScoped<CustomerSyncItemValidator>();
+        Services.AddScoped<ProductSyncItemValidator>();
+        Services.AddScoped<OrderSyncItemValidator>();
+        Services.AddScoped<ReceiptSyncItemValidator>();
 
         return Services;
     }
