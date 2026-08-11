@@ -15,6 +15,12 @@ public class AdminReportService(AppDbContext dbContext) : IAdminReportService
     // SubAdminBreakdownResponse.RecentActivations).
     private const int RecentActivationsCount = 10;
 
+    // ExpiringSoon must mean genuinely "about to expire," not just "the
+    // soonest of however many happen to exist" - a subscriber whose
+    // subscription still has months left must never appear here just
+    // because everyone else's ends even further out.
+    private const int ExpiringSoonWindowDays = 3;
+
     public async Task<AdminDashboardResponse> GetDashboardAsync(AdminReportPeriod period, Guid? actingSubAdminId)
     {
         var cutoff = GetCutoff(period);
@@ -118,7 +124,9 @@ public class AdminReportService(AppDbContext dbContext) : IAdminReportService
                 })
                 .ToList(),
             ExpiringSoon = managedSubscribers
-                .Where(u => u.SubscriptionEnd != null && u.SubscriptionEnd > DateTime.UtcNow)
+                .Where(u => u.SubscriptionEnd != null
+                    && u.SubscriptionEnd > DateTime.UtcNow
+                    && u.SubscriptionEnd <= DateTime.UtcNow.AddDays(ExpiringSoonWindowDays))
                 .OrderBy(u => u.SubscriptionEnd)
                 .Take(RecentActivationsCount)
                 .Select(u => new ExpiringSubscriberResponse
