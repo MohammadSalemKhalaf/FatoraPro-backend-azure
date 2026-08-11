@@ -12,6 +12,10 @@ public class PurchaseRequest
     public Guid? InvoiceId { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+
+    // See Order.SyncedAt - same idea, same reasoning: PurchaseRequestsController.Save
+    // also stamps CreatedAt from the device's own clock.
+    public DateTime? SyncedAt { get; set; }
     public List<PurchaseRequestItem> Items { get; set; } = [];
 }
 

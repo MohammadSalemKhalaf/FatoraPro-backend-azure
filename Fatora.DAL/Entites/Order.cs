@@ -86,4 +86,15 @@ public class Order : ISyncableEntity
     // creation, and never overwritten by a later edit-sync.
     public double? Latitude { get; set; }
     public double? Longitude { get; set; }
+
+    // When this row actually reached the server via a rep's sync push (see
+    // SyncService.PushOrderAsync) - deliberately separate from CreatedAt,
+    // which is stamped from the device's own clock and can be hours behind
+    // if the rep worked offline for a while. RepActivityService's rolling
+    // "recent activity" window needs the former, everything else (reports,
+    // display, last-write-wins conflict resolution) needs the latter. Set
+    // once, at creation, and never overwritten by a later edit-sync. Null
+    // for anything created directly by the owner (never pushed through
+    // sync) or synced before this column existed.
+    public DateTime? SyncedAt { get; set; }
 }

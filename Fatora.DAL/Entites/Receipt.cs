@@ -27,4 +27,7 @@ public class Receipt : ISyncableEntity
     // See Order.Latitude/Longitude - same idea, same reasoning.
     public double? Latitude { get; set; }
     public double? Longitude { get; set; }
+
+    // See Order.SyncedAt - same idea, same reasoning.
+    public DateTime? SyncedAt { get; set; }
 }

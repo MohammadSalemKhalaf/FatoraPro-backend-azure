@@ -110,14 +110,24 @@ public class RepActivityService(AppDbContext dbContext) : IRepActivityService
             .Include(o => o.OrderItems)
             .Include(o => o.Customer)
             .Include(o => o.CreatedByRep)
-            .Where(o => o.UserId == ownerUserId && o.CreatedByRepId != null && o.CreatedAt >= since)
+            // A rep who worked offline for a while syncs with a CreatedAt
+            // already stamped from the device's clock at creation time -
+            // comparing that against the window would drop it even though
+            // the sync itself just succeeded. SyncedAt (set once, at the
+            // moment the row actually reached the server - see
+            // SyncService.PushOrderAsync) is what "recent" should mean
+            // here; CreatedAt is only a fallback for rows synced before
+            // that column existed.
+            .Where(o => o.UserId == ownerUserId && o.CreatedByRepId != null
+                && (o.SyncedAt ?? o.CreatedAt) >= since)
             .ToListAsync();
 
         var receipts = await dbContext.Receipts
             .AsNoTracking()
             .Include(r => r.Customer)
             .Include(r => r.CreatedByRep)
-            .Where(r => r.UserId == ownerUserId && r.CreatedByRepId != null && r.IsActive && r.CreatedAt >= since)
+            .Where(r => r.UserId == ownerUserId && r.CreatedByRepId != null && r.IsActive
+                && (r.SyncedAt ?? r.CreatedAt) >= since)
             .ToListAsync();
 
         // Only requests actually being worked (preparing/ready) - a draft is
@@ -129,7 +139,8 @@ public class RepActivityService(AppDbContext dbContext) : IRepActivityService
         var purchaseRequests = await dbContext.PurchaseRequests
             .AsNoTracking()
             .Include(pr => pr.CreatedByRep)
-            .Where(pr => pr.UserId == ownerUserId && pr.CreatedByRepId != null && pr.CreatedAt >= since
+            .Where(pr => pr.UserId == ownerUserId && pr.CreatedByRepId != null
+                && (pr.SyncedAt ?? pr.CreatedAt) >= since
                 && (pr.Status == "preparing" || pr.Status == "ready"))
             .ToListAsync();
 

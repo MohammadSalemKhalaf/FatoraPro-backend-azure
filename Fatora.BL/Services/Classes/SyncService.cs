@@ -228,6 +228,7 @@ public class SyncService(AppDbContext dbContext) : ISyncService
                     IsDeleted = scopeToRepId is null && item.IsDeleted,
                     CreatedAt = item.UpdatedAt,
                     UpdatedAt = item.UpdatedAt,
+                    SyncedAt = DateTime.UtcNow,
                     Latitude = item.Latitude,
                     Longitude = item.Longitude,
                     OrderItems = item.Items.Select(i => new OrderItem
@@ -447,6 +448,7 @@ public class SyncService(AppDbContext dbContext) : ISyncService
                     CreatedByRepId = scopeToRepId,
                     CreatedAt = item.UpdatedAt,
                     UpdatedAt = item.UpdatedAt,
+                    SyncedAt = DateTime.UtcNow,
                     Latitude = item.Latitude,
                     Longitude = item.Longitude
                 });

@@ -46,7 +46,7 @@ public class PurchaseRequestsController(AppDbContext db) : ControllerBase
         if (entity is null)
         {
             entity = new PurchaseRequest { Id = id, UserId = ownerId, CreatedByRepId = repId,
-                CreatedAt = request.CreatedAt.ToUniversalTime() };
+                CreatedAt = request.CreatedAt.ToUniversalTime(), SyncedAt = DateTime.UtcNow };
             db.PurchaseRequests.Add(entity);
         }
         entity.CustomerId = request.CustomerId;
