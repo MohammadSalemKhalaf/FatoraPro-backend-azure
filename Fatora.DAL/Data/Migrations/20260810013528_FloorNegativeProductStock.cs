@@ -10,10 +10,14 @@ namespace Fatora.DAL.Data.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            // One-time cleanup: stock could go negative before OrderService/
-            // SyncService's AdjustStock started flooring at 0. Going
-            // forward nothing can produce a negative value again, so this
-            // never needs to run more than once.
+            // One-time cleanup that zeroed stock which had gone negative.
+            //
+            // SUPERSEDED: the floor this went with has since been removed
+            // from OrderService/SyncService's AdjustStock - negative stock
+            // is now the correct, intended result of selling more than is
+            // on hand, and flooring it desynced the server from the clients,
+            // which never floored their own copy. Kept only because it has
+            // already run; nothing should reintroduce it.
             migrationBuilder.Sql(
                 "UPDATE \"Products\" SET \"StockQuantity\" = 0 WHERE \"StockQuantity\" < 0;");
         }

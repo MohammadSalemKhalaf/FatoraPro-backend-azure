@@ -400,17 +400,19 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         return previous.Quantity != quantity || previous.UnitPrice != unitPrice || previous.IsEdited;
     }
 
-    // A sale is never blocked by insufficient stock here - the frontend's
-    // quantity stepper is what actually prevents that. But the result is
-    // always floored at 0: this is the server's own decrement, which two
-    // different devices' offline sales can both reach for the same product,
-    // so it has to be the final authority that never lets the count go
-    // negative, regardless of what either client's own local cap saw.
+    // A sale is never blocked by insufficient stock, and the result is never
+    // floored either - selling 5 of a product with 2 on hand leaves -3, which
+    // is the honest answer: three owed to a customer and still to be
+    // restocked. Flooring at 0 loses that debt, and worse, it desyncs: the
+    // client applies the same delta to its own copy without a floor (see
+    // OrdersRepository._adjustStock), so the next pull would jump the number
+    // to something the device never computed, and returning that invoice
+    // would then hand back 5 to a product that only ever had 2.
     private static void AdjustStock(Product product, int delta)
     {
         if (product.StockQuantity is { } stock)
         {
-            product.StockQuantity = Math.Max(0, stock + delta);
+            product.StockQuantity = stock + delta;
         }
     }
 

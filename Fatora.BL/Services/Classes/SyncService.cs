@@ -399,17 +399,16 @@ public class SyncService(AppDbContext dbContext) : ISyncService
         }
     }
 
-    // A sale is never blocked by insufficient stock here - the frontend's
-    // quantity stepper is what actually prevents that. But the result is
-    // always floored at 0: this is the server's own decrement, which two
-    // different devices' offline sales can both reach for the same product,
-    // so it has to be the final authority that never lets the count go
-    // negative, regardless of what either client's own local cap saw.
+    // Mirrors OrderService.AdjustStock exactly, including the deliberate
+    // absence of a floor at 0 - see the note there. Two devices selling the
+    // same product offline both apply their own delta here, and the sum
+    // going negative is the correct outcome: it says the shelf is short by
+    // that many, which is precisely what a floor would hide.
     private static void AdjustStock(Product product, int delta)
     {
         if (product.StockQuantity is { } stock)
         {
-            product.StockQuantity = Math.Max(0, stock + delta);
+            product.StockQuantity = stock + delta;
         }
     }
 
