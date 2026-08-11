@@ -219,12 +219,13 @@ public class OrderService(AppDbContext dbContext) : IOrderService
 
     // Purely a "hide from the Invoices list" operation - no stock restore,
     // no effect on debt/sales/reports, and the customer statement and CSV
-    // exports keep showing it exactly as before (see Order.IsDeleted). The
-    // intended use is cleaning up an invoice that's already been Returned
-    // (whose stock/financial effects were already handled by ReturnAsync),
-    // but nothing here requires that - deleting a non-returned invoice is
-    // allowed too, at the owner's own discretion (this endpoint is already
-    // owner-only, see OrdersController.Delete).
+    // exports keep showing it exactly as before (see Order.IsDeleted).
+    // Restricted to an invoice that's already been Returned (whose
+    // stock/financial effects were already handled by ReturnAsync) - a
+    // still-active invoice can only be deleted by returning it first. This
+    // endpoint is already owner-only (see OrdersController.Delete), and the
+    // exact same IsReturned gate is enforced again in SyncService's push
+    // handling for the offline-first delete path.
     public async Task DeleteAsync(Guid userId, Guid id, Guid? scopeToRepId = null)
     {
         var order = await dbContext.Orders.FirstOrDefaultAsync(o =>
@@ -233,6 +234,11 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         if (order is null)
         {
             throw new NotFoundException(nameof(Order), id);
+        }
+
+        if (!order.IsReturned)
+        {
+            throw new ForbiddenException("Only a returned invoice can be deleted.");
         }
 
         order.IsDeleted = true;

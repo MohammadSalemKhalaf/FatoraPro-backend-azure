@@ -258,11 +258,10 @@ public class SyncService(AppDbContext dbContext) : ISyncService
 
             // A push that only just marked this deleted (see
             // OrdersRepository.delete) is handled before every other gate
-            // below, including the "already returned" rejection right after
-            // this block - deleting an already-returned invoice is in fact
-            // the normal case (see OrderService.DeleteAsync), and deleting a
-            // non-returned one is still allowed at the owner's own
-            // discretion. No stock/customer/item reconciliation, no status
+            // below - mirrors OrderService.DeleteAsync's own two checks
+            // (owner-only, already-Returned) exactly, since this is the
+            // second, offline-first way that same delete can reach the
+            // server. No stock/customer/item reconciliation, no status
             // change, just the flag itself - see Order.IsDeleted for why it
             // deliberately has no other effect.
             if (item.IsDeleted && !existing.IsDeleted)
@@ -270,6 +269,11 @@ public class SyncService(AppDbContext dbContext) : ISyncService
                 if (scopeToRepId is not null)
                 {
                     return new SyncItemResult(item.Id, "Rejected", "Only the account owner can delete an invoice.");
+                }
+
+                if (!existing.IsReturned)
+                {
+                    return new SyncItemResult(item.Id, "Rejected", "Only a returned invoice can be deleted.");
                 }
 
                 existing.IsDeleted = true;
