@@ -22,4 +22,10 @@ public class SubscriptionActivation
     public SubAdmin? PerformedBySubAdmin { get; set; }
 
     public DateTime ActivatedAt { get; set; }
+
+    // Captured on the acting Admin/SubAdmin's device at the moment of
+    // activation - see Order.Latitude/Longitude, same idea. Null when
+    // location permission was never granted or the device was offline.
+    public double? Latitude { get; set; }
+    public double? Longitude { get; set; }
 }

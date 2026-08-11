@@ -59,17 +59,17 @@ public class UsersController(
 
     [Authorize(Roles = "Admin,SubAdmin")]
     [HttpPost("{id:guid}/suspend")]
-    public async Task<IActionResult> Suspend(Guid id)
+    public async Task<IActionResult> Suspend(Guid id, LocationRequest? location = null)
     {
-        await userService.SuspendAsync(id, User.GetSubAdminIdOrNull());
+        await userService.SuspendAsync(id, User.GetSubAdminIdOrNull(), location);
         return NoContent();
     }
 
     [Authorize(Roles = "Admin,SubAdmin")]
     [HttpPost("{id:guid}/activate")]
-    public async Task<IActionResult> Activate(Guid id)
+    public async Task<IActionResult> Activate(Guid id, LocationRequest? location = null)
     {
-        await userService.ActivateAsync(id, User.GetSubAdminIdOrNull());
+        await userService.ActivateAsync(id, User.GetSubAdminIdOrNull(), location);
         return NoContent();
     }
 

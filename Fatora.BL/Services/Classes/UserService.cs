@@ -128,7 +128,9 @@ public class UserService(AppDbContext dbContext, IPasswordHasherService password
             SubscriptionType = request.SubscriptionType,
             CustomMonths = user.CustomMonths,
             PerformedBySubAdminId = actingSubAdminId,
-            ActivatedAt = start
+            ActivatedAt = start,
+            Latitude = request.Latitude,
+            Longitude = request.Longitude
         });
 
         await dbContext.SaveChangesAsync();
@@ -320,7 +322,7 @@ public class UserService(AppDbContext dbContext, IPasswordHasherService password
         await dbContext.SaveChangesAsync();
     }
 
-    public async Task SuspendAsync(Guid userId, Guid? actingSubAdminId = null)
+    public async Task SuspendAsync(Guid userId, Guid? actingSubAdminId = null, LocationRequest? location = null)
     {
         if (actingSubAdminId is not null)
         {
@@ -334,10 +336,20 @@ public class UserService(AppDbContext dbContext, IPasswordHasherService password
         var refreshTokens = await dbContext.RefreshTokens.Where(r => r.UserId == userId).ToListAsync();
         dbContext.RefreshTokens.RemoveRange(refreshTokens);
 
+        dbContext.SubAdminAccountActions.Add(new SubAdminAccountAction
+        {
+            UserId = user.Id,
+            ActionType = SubAdminAccountActionType.Suspended,
+            PerformedBySubAdminId = actingSubAdminId,
+            CreatedAt = DateTime.UtcNow,
+            Latitude = location?.Latitude,
+            Longitude = location?.Longitude
+        });
+
         await dbContext.SaveChangesAsync();
     }
 
-    public async Task ActivateAsync(Guid userId, Guid? actingSubAdminId = null)
+    public async Task ActivateAsync(Guid userId, Guid? actingSubAdminId = null, LocationRequest? location = null)
     {
         if (actingSubAdminId is not null)
         {
@@ -347,6 +359,17 @@ public class UserService(AppDbContext dbContext, IPasswordHasherService password
         var user = await FindUser(userId);
 
         user.IsActive = true;
+
+        dbContext.SubAdminAccountActions.Add(new SubAdminAccountAction
+        {
+            UserId = user.Id,
+            ActionType = SubAdminAccountActionType.Reactivated,
+            PerformedBySubAdminId = actingSubAdminId,
+            CreatedAt = DateTime.UtcNow,
+            Latitude = location?.Latitude,
+            Longitude = location?.Longitude
+        });
+
         await dbContext.SaveChangesAsync();
     }
 

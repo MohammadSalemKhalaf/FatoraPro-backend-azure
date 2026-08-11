@@ -39,6 +39,7 @@ public static class GroupRegistrations
         Services.AddScoped<ISubAdminAuthService, SubAdminAuthService>();
         Services.AddScoped<ISupportContactService, SupportContactService>();
         Services.AddScoped<IAdminReportService, AdminReportService>();
+        Services.AddScoped<ISubAdminActivityService, SubAdminActivityService>();
 
         Services.AddScoped<LoginRequestValidator>();
         Services.AddScoped<CreateRepRequestValidator>();

@@ -35,7 +35,11 @@ public interface IUserService
     public Task<UserResponse> UpdateProfileAsync(Guid userId, UpdateProfileRequest request);
     public Task DeleteAccountAsync(Guid userId, string password);
     public Task ChangePasswordAsync(Guid userId, string currentPassword, string newPassword);
-    public Task SuspendAsync(Guid userId, Guid? actingSubAdminId = null);
-    public Task ActivateAsync(Guid userId, Guid? actingSubAdminId = null);
+    // location: the acting Admin/SubAdmin's device position at the moment
+    // of the action, if available - see SubAdminAccountAction.Latitude/
+    // Longitude. Always optional; never required for the action to
+    // succeed.
+    public Task SuspendAsync(Guid userId, Guid? actingSubAdminId = null, LocationRequest? location = null);
+    public Task ActivateAsync(Guid userId, Guid? actingSubAdminId = null, LocationRequest? location = null);
     public Task<UserResponse> EnableSalesManagerAsync(Guid userId);
 }

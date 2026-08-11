@@ -21,6 +21,7 @@ public class SubAdminsController(
     ISubAdminService subAdminService,
     ISubAdminAuthService subAdminAuthService,
     IUserService userService,
+    ISubAdminActivityService subAdminActivityService,
     CreateSubAdminRequestValidator createSubAdminValidator) : ControllerBase
 {
     [Authorize(Roles = "Admin")]
@@ -125,6 +126,31 @@ public class SubAdminsController(
     {
         await userService.ClaimSubscriberAsync(request.SubscriberId, User.GetSubAdminIdOrNull());
         return NoContent();
+    }
+
+    // That day's located actions for this SubAdmin, in chronological order -
+    // the numbered, connected route the Admin sees on the map. start/end
+    // are explicit UTC instants for the caller's local calendar day
+    // (computed client-side), same as RepsController.GetRoute. Admin-only -
+    // this is an oversight tool the SubAdmin itself has no use for.
+    [Authorize(Roles = "Admin")]
+    [HttpGet("{id:guid}/route")]
+    public async Task<IActionResult> GetRoute(Guid id, [FromQuery] DateTime start, [FromQuery] DateTime end)
+    {
+        var result = await subAdminActivityService.GetRouteAsync(id, start, end);
+        return Ok(result);
+    }
+
+    // Every SubAdmin-performed activation/suspend/reactivate from the last
+    // rolling 24 hours across the whole platform, newest first - the
+    // Admin's quick "what have my SubAdmins been doing" glance. Mirrors
+    // RepsController.GetActivityFeed.
+    [Authorize(Roles = "Admin")]
+    [HttpGet("activity-feed")]
+    public async Task<IActionResult> GetActivityFeed()
+    {
+        var result = await subAdminActivityService.GetActivityFeedAsync();
+        return Ok(result);
     }
 
     // No username/password to authenticate with at this point - this is the

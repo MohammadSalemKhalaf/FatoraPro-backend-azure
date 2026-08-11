@@ -23,6 +23,16 @@ public enum SubscriptionType
     Custom
 }
 
+// See SubAdminAccountAction.cs - Activated isn't a member here since that
+// event already has its own dedicated row shape (SubscriptionType,
+// CustomMonths) in SubscriptionActivation; this only covers the two
+// actions that previously had no audit trail at all.
+public enum SubAdminAccountActionType
+{
+    Suspended,
+    Reactivated
+}
+
 
 public class User
 {
