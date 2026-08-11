@@ -13,8 +13,12 @@ public class PurchaseRequest
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 
-    // See Order.SyncedAt - same idea, same reasoning: PurchaseRequestsController.Save
-    // also stamps CreatedAt from the device's own clock.
+    // Same purpose as Order.SyncedAt (the rep activity feed's rolling
+    // window needs server-arrival time, not the device's own CreatedAt),
+    // but unlike Order/Receipt this is stamped on *every* save, not just
+    // creation - a request commonly sits as "draft" long before it becomes
+    // "preparing"/"ready", and that later transition is the moment the
+    // feed actually cares about. See PurchaseRequestsController.Save.
     public DateTime? SyncedAt { get; set; }
     public List<PurchaseRequestItem> Items { get; set; } = [];
 }

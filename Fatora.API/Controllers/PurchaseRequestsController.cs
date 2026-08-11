@@ -46,7 +46,7 @@ public class PurchaseRequestsController(AppDbContext db) : ControllerBase
         if (entity is null)
         {
             entity = new PurchaseRequest { Id = id, UserId = ownerId, CreatedByRepId = repId,
-                CreatedAt = request.CreatedAt.ToUniversalTime(), SyncedAt = DateTime.UtcNow };
+                CreatedAt = request.CreatedAt.ToUniversalTime() };
             db.PurchaseRequests.Add(entity);
         }
         entity.CustomerId = request.CustomerId;
@@ -54,6 +54,14 @@ public class PurchaseRequestsController(AppDbContext db) : ControllerBase
         entity.Notes = request.Notes;
         entity.InvoiceId = request.InvoiceId;
         entity.UpdatedAt = request.UpdatedAt.ToUniversalTime();
+        // Unlike Order/Receipt's SyncedAt (frozen at creation - see
+        // SyncService.PushOrderAsync), a purchase request is often drafted
+        // long before it becomes real activity: it may sit as "draft" for
+        // a while, then only turn "preparing"/"ready" on a later save. The
+        // owner's activity feed cares about *that* moment, not the
+        // original draft's - so this is stamped on every save, not just
+        // creation.
+        entity.SyncedAt = DateTime.UtcNow;
         db.PurchaseRequestItems.RemoveRange(entity.Items);
         entity.Items = request.Items.Select(x => new PurchaseRequestItem {
             PurchaseRequestId = id, ProductId = x.ProductId, Quantity = x.Quantity }).ToList();
