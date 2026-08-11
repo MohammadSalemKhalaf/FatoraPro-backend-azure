@@ -15,5 +15,6 @@ public class SubAdminResponse
     public bool CanActivateAnnual { get; set; }
     public bool CanActivateCustomMonths { get; set; }
     public bool CanManageAccount { get; set; }
+    public bool CanResetPassword { get; set; }
     public DateTime CreatedAt { get; set; }
 }

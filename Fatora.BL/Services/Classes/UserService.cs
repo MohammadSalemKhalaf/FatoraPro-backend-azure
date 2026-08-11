@@ -307,7 +307,7 @@ public class UserService(AppDbContext dbContext, IPasswordHasherService password
     {
         if (actingSubAdminId is not null)
         {
-            await EnsureSubAdminCanManageAccountAsync(actingSubAdminId.Value);
+            await EnsureSubAdminCanResetPasswordAsync(actingSubAdminId.Value);
         }
 
         var user = await FindUser(userId);
@@ -350,11 +350,10 @@ public class UserService(AppDbContext dbContext, IPasswordHasherService password
         await dbContext.SaveChangesAsync();
     }
 
-    // Mirrors EnsureSubAdminCanActivateAsync's shape - suspending/reactivating
-    // and resetting a subscriber's password share one combined flag (see
-    // SubAdmin.CanManageAccount) rather than two separate ones, since both
-    // are "account management" actions the top Admin grants/revokes as a
-    // unit. The top Admin (actingSubAdminId null) always bypasses this.
+    // Mirrors EnsureSubAdminCanActivateAsync's shape. Gates Suspend/Activate
+    // only - see SubAdmin.CanManageAccount, independent of the password-reset
+    // permission below. The top Admin (actingSubAdminId null) always bypasses
+    // this.
     private async Task EnsureSubAdminCanManageAccountAsync(Guid subAdminId)
     {
         var subAdmin = await dbContext.SubAdmins.FirstOrDefaultAsync(s => s.Id == subAdminId);
@@ -366,6 +365,24 @@ public class UserService(AppDbContext dbContext, IPasswordHasherService password
         if (!subAdmin.CanManageAccount)
         {
             throw new ForbiddenException("You are not permitted to manage this subscriber's account.");
+        }
+    }
+
+    // Gates ResetPassword only - see SubAdmin.CanResetPassword, independent
+    // of EnsureSubAdminCanManageAccountAsync above, so the top Admin can
+    // grant one without the other. The top Admin (actingSubAdminId null)
+    // always bypasses this.
+    private async Task EnsureSubAdminCanResetPasswordAsync(Guid subAdminId)
+    {
+        var subAdmin = await dbContext.SubAdmins.FirstOrDefaultAsync(s => s.Id == subAdminId);
+        if (subAdmin is null)
+        {
+            throw new NotFoundException(nameof(SubAdmin), subAdminId);
+        }
+
+        if (!subAdmin.CanResetPassword)
+        {
+            throw new ForbiddenException("You are not permitted to reset this subscriber's password.");
         }
     }
 

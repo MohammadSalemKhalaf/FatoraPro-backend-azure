@@ -43,11 +43,16 @@ public class SubAdmin
     public bool CanActivateAnnual { get; set; }
     public bool CanActivateCustomMonths { get; set; }
 
-    // Suspending/reactivating a subscriber's account and resetting their
-    // password - both gated by this one flag (see
-    // UserService.EnsureSubAdminCanManageAccountAsync), distinct from the
-    // activation permissions above.
+    // Suspending/reactivating a subscriber's account - see
+    // UserService.EnsureSubAdminCanManageAccountAsync. Independent of
+    // CanResetPassword below: the Admin may grant either, both, or neither.
     public bool CanManageAccount { get; set; }
+
+    // Resetting a subscriber's password - see
+    // UserService.EnsureSubAdminCanResetPasswordAsync. Split out from
+    // CanManageAccount rather than folded into it, since the Admin must be
+    // able to grant one without the other.
+    public bool CanResetPassword { get; set; }
 
     public DateTime CreatedAt { get; set; }
 }

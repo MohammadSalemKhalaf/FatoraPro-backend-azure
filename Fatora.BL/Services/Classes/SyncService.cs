@@ -399,17 +399,13 @@ public class SyncService(AppDbContext dbContext) : ISyncService
         }
     }
 
-    // A sale is never blocked by insufficient stock here - the frontend's
-    // quantity stepper is what actually prevents that. But the result is
-    // always floored at 0: this is the server's own decrement, which two
-    // different devices' offline sales can both reach for the same product,
-    // so it has to be the final authority that never lets the count go
-    // negative, regardless of what either client's own local cap saw.
+    // Never validated/clamped here - see Product.StockQuantity: a sale must
+    // never be blocked by insufficient stock, negative is allowed.
     private static void AdjustStock(Product product, int delta)
     {
         if (product.StockQuantity is { } stock)
         {
-            product.StockQuantity = Math.Max(0, stock + delta);
+            product.StockQuantity = stock + delta;
         }
     }
 
