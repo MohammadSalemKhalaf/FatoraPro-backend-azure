@@ -17,9 +17,10 @@ namespace Fatora.API.Controllers;
 // Creating subscribers stays Admin-exclusive. GetUsers is safe to open up
 // because it auto-scopes a SubAdmin caller to its own claimed subscribers
 // (see GetUsersAsync); UpdateSubscription is gated per-call by that
-// SubAdmin's own granted CanActivate* flags; Suspend/Activate/ResetPassword
-// are gated per-call by its CanManageAccount flag (see
-// UserService.EnsureSubAdminCanManageAccountAsync).
+// SubAdmin's own granted CanActivate* flags; Suspend/Activate are gated by
+// its CanManageAccount flag and ResetPassword by its separate
+// CanResetPassword flag (see UserService.EnsureSubAdminCanManageAccountAsync
+// / EnsureSubAdminCanResetPasswordAsync) - independently grantable.
 [Route("api/[controller]")]
 [ApiController]
 [Authorize(Roles = "Admin,SubAdmin")]

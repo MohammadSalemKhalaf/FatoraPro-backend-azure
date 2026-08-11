@@ -399,11 +399,11 @@ public class SyncService(AppDbContext dbContext) : ISyncService
         }
     }
 
-    // Mirrors OrderService.AdjustStock exactly, including the deliberate
-    // absence of a floor at 0 - see the note there. Two devices selling the
-    // same product offline both apply their own delta here, and the sum
-    // going negative is the correct outcome: it says the shelf is short by
-    // that many, which is precisely what a floor would hide.
+    // Never validated/clamped here - see Product.StockQuantity and the note
+    // on OrderService.AdjustStock, which this mirrors exactly. Two devices
+    // selling the same product offline both apply their own delta here, and
+    // the sum going negative is the correct outcome: it says the shelf is
+    // short by that many, which is precisely what a floor would hide.
     private static void AdjustStock(Product product, int delta)
     {
         if (product.StockQuantity is { } stock)
