@@ -59,7 +59,37 @@ public class RepActivityService(AppDbContext dbContext) : IRepActivityService
             })
             .ToListAsync();
 
-        var unlocatedCount = orders.Count(o => o.Latitude is null) + receipts.Count(r => r.Latitude is null);
+        // Same "preparing"/"ready" carve-out as GetActivityFeedAsync below -
+        // a draft is still being built by the rep, not activity worth
+        // plotting yet. PurchaseRequest has no Customer navigation property
+        // (see GetActivityFeedAsync's comment), so names are resolved with a
+        // separate lookup instead of an Include.
+        var purchaseRequests = await dbContext.PurchaseRequests
+            .AsNoTracking()
+            .Where(pr => pr.CreatedByRepId == repId && pr.CreatedAt >= startOfDay && pr.CreatedAt < endOfDay
+                && (pr.Status == "preparing" || pr.Status == "ready"))
+            .Select(pr => new
+            {
+                pr.Id,
+                pr.Latitude,
+                pr.Longitude,
+                pr.CreatedAt,
+                pr.CustomerId
+            })
+            .ToListAsync();
+        var requestCustomerIds = purchaseRequests
+            .Where(pr => pr.CustomerId != null)
+            .Select(pr => pr.CustomerId!.Value)
+            .Distinct()
+            .ToList();
+        var requestCustomerNames = await dbContext.Customers
+            .AsNoTracking()
+            .Where(c => requestCustomerIds.Contains(c.Id))
+            .ToDictionaryAsync(c => c.Id, c => c.Name);
+
+        var unlocatedCount = orders.Count(o => o.Latitude is null)
+            + receipts.Count(r => r.Latitude is null)
+            + purchaseRequests.Count(pr => pr.Latitude is null);
 
         var points = orders
             .Where(o => o.Latitude is not null && o.Longitude is not null)
@@ -84,6 +114,21 @@ public class RepActivityService(AppDbContext dbContext) : IRepActivityService
                     CustomerName = r.CustomerName,
                     Label = r.Amount.ToString("0.##"),
                     CreatedAt = r.CreatedAt
+                }))
+            .Concat(purchaseRequests
+                .Where(pr => pr.Latitude is not null && pr.Longitude is not null)
+                .Select(pr => new RepRoutePointResponse
+                {
+                    Id = pr.Id,
+                    Type = "PurchaseRequest",
+                    Latitude = pr.Latitude!.Value,
+                    Longitude = pr.Longitude!.Value,
+                    CustomerName = pr.CustomerId != null &&
+                        requestCustomerNames.TryGetValue(pr.CustomerId.Value, out var customerName)
+                        ? customerName
+                        : "بدون عميل",
+                    Label = "طلبية",
+                    CreatedAt = pr.CreatedAt
                 }))
             .OrderBy(p => p.CreatedAt)
             .ToList();

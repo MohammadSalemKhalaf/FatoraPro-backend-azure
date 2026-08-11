@@ -46,7 +46,10 @@ public class PurchaseRequestsController(AppDbContext db) : ControllerBase
         if (entity is null)
         {
             entity = new PurchaseRequest { Id = id, UserId = ownerId, CreatedByRepId = repId,
-                CreatedAt = request.CreatedAt.ToUniversalTime() };
+                CreatedAt = request.CreatedAt.ToUniversalTime(),
+                // Same "set once, at creation" semantics as Order/Receipt -
+                // never touched again on a later edit-save.
+                Latitude = request.Latitude, Longitude = request.Longitude };
             db.PurchaseRequests.Add(entity);
         }
         entity.CustomerId = request.CustomerId;
@@ -86,10 +89,12 @@ public class PurchaseRequestsController(AppDbContext db) : ControllerBase
     private static object ToResponse(PurchaseRequest x) => new {
         x.Id, x.CustomerId, x.Status, x.Notes, x.InvoiceId, x.CreatedAt, x.UpdatedAt,
         createdByRepId = x.CreatedByRepId, createdByRepName = x.CreatedByRep?.Name,
+        x.Latitude, x.Longitude,
         items = x.Items.Select(i => new { i.ProductId, i.Quantity })
     };
 }
 
 public record SavePurchaseRequest(Guid Id, Guid? CustomerId, string Status, string? Notes,
-    Guid? InvoiceId, DateTime CreatedAt, DateTime UpdatedAt, List<SavePurchaseRequestItem> Items);
+    Guid? InvoiceId, DateTime CreatedAt, DateTime UpdatedAt, List<SavePurchaseRequestItem> Items,
+    double? Latitude = null, double? Longitude = null);
 public record SavePurchaseRequestItem(Guid ProductId, int Quantity);
