@@ -66,10 +66,21 @@ public class PurchaseRequestsController(AppDbContext db) : ControllerBase
         // original draft's - so this is stamped on every save, not just
         // creation.
         entity.SyncedAt = DateTime.UtcNow;
+        // Managed directly through the DbSet (not via the entity.Items navigation setter) -
+        // replacing a required collection navigation by reassigning it confuses EF's change
+        // tracker into generating an UPDATE against the row it just DELETEd instead of an
+        // INSERT, throwing a DbUpdateConcurrencyException ("expected to affect 1 row(s), but
+        // actually affected 0"). Identical comment/fix in SyncService.PushOrderAsync's edit
+        // branch for Order.OrderItems - same anti-pattern, just never ported over here.
         db.PurchaseRequestItems.RemoveRange(entity.Items);
-        entity.Items = request.Items.Select(x => new PurchaseRequestItem {
+        var newItems = request.Items.Select(x => new PurchaseRequestItem {
             PurchaseRequestId = id, ProductId = x.ProductId, Quantity = x.Quantity }).ToList();
+        db.PurchaseRequestItems.AddRange(newItems);
         await db.SaveChangesAsync();
+        // Safe here (unlike before SaveChangesAsync above) - the delete/insert has already
+        // committed, so this is just making sure the in-memory entity reflects it for the
+        // response below, not fighting the change tracker mid-flight.
+        entity.Items = newItems;
         await db.Entry(entity).Reference(x => x.CreatedByRep).LoadAsync();
         return Ok(ToResponse(entity));
     }
