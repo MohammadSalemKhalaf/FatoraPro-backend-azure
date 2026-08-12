@@ -64,16 +64,26 @@ public class RepActivityService(AppDbContext dbContext) : IRepActivityService
         // plotting yet. PurchaseRequest has no Customer navigation property
         // (see GetActivityFeedAsync's comment), so names are resolved with a
         // separate lookup instead of an Include.
+        //
+        // Windowed on SyncedAt, not CreatedAt - same reasoning as
+        // GetActivityFeedAsync below. This one specifically matters now that
+        // location itself is captured at this same preparing/ready moment
+        // (not at creation, see PurchaseRequestsController.Save): a request
+        // created one day and only prepared/readied on a later one used to
+        // fall into a blind spot on every route - its CreatedAt-day route
+        // had no location yet, and the day it actually got one was never
+        // checked.
         var purchaseRequests = await dbContext.PurchaseRequests
             .AsNoTracking()
-            .Where(pr => pr.CreatedByRepId == repId && pr.CreatedAt >= startOfDay && pr.CreatedAt < endOfDay
+            .Where(pr => pr.CreatedByRepId == repId
+                && (pr.SyncedAt ?? pr.CreatedAt) >= startOfDay && (pr.SyncedAt ?? pr.CreatedAt) < endOfDay
                 && (pr.Status == "preparing" || pr.Status == "ready"))
             .Select(pr => new
             {
                 pr.Id,
                 pr.Latitude,
                 pr.Longitude,
-                pr.CreatedAt,
+                CreatedAt = pr.SyncedAt ?? pr.CreatedAt,
                 pr.CustomerId
             })
             .ToListAsync();
