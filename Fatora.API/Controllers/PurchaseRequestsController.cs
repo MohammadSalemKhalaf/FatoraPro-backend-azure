@@ -19,6 +19,7 @@ public class PurchaseRequestsController(AppDbContext db) : ControllerBase
         var scope = User.GetRepIdOrNull() ?? repId;
         var query = db.PurchaseRequests.AsNoTracking()
             .Include(x => x.CreatedByRep)
+            .Include(x => x.Items)
             .Where(x => x.UserId == ownerId);
         if (scope is not null) query = query.Where(x => x.CreatedByRepId == scope);
         var rows = await query.OrderByDescending(x => x.UpdatedAt).ToListAsync();

@@ -60,11 +60,33 @@ public class SyncService(AppDbContext dbContext) : ISyncService
             .Where(p => p.UserId == userId && p.UpdatedAt > since)
             .ToListAsync();
 
-        var orders = await dbContext.Orders
+        var ordersQuery = dbContext.Orders
             .Include(o => o.Customer)
-            .Where(o => o.UserId == userId && o.UpdatedAt > since
-                && (scopeToRepId == null || o.CreatedByRepId == scopeToRepId))
-            .ToListAsync();
+            .Where(o => o.UserId == userId && o.UpdatedAt > since);
+
+        if (scopeToRepId is not null)
+        {
+            // A rep's own orders, plus the invoice the owner raised from a
+            // purchase request that rep created. That invoice belongs to the
+            // owner (CreatedByRepId is null on it), but the rep's app offers
+            // "عرض الفاتورة الجاهزة" straight off their own request, and it
+            // reads the invoice out of the local cache this pull fills - so
+            // without it the rep is shown a request marked ready whose
+            // invoice cannot be opened at all. Read-only by construction:
+            // pulling it never grants the rep any right to edit it, since
+            // every write still goes through PushOrderAsync's own scope
+            // check.
+            var linkedInvoiceIds = dbContext.PurchaseRequests
+                .Where(p => p.UserId == userId
+                    && p.CreatedByRepId == scopeToRepId
+                    && p.InvoiceId != null)
+                .Select(p => p.InvoiceId!.Value);
+
+            ordersQuery = ordersQuery.Where(o =>
+                o.CreatedByRepId == scopeToRepId || linkedInvoiceIds.Contains(o.Id));
+        }
+
+        var orders = await ordersQuery.ToListAsync();
 
         var receipts = await dbContext.Receipts
             .Where(r => r.UserId == userId && r.UpdatedAt > since
