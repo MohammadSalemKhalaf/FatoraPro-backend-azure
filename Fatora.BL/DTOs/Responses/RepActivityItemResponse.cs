@@ -27,9 +27,10 @@ public class RepActivityItemResponse
     public decimal Amount { get; set; }
     public DateTime CreatedAt { get; set; }
 
-    // Null when the device had no location to capture at creation time -
-    // see Order.Latitude/Longitude for why. Always null for a
-    // PurchaseRequest - that entity has no location fields at all.
+    // Null when the device had no location to capture yet - see
+    // Order.Latitude/Longitude for Order/Receipt, and
+    // PurchaseRequest.Latitude/Longitude (captured on the preparing/ready
+    // transition, not at draft creation) for a PurchaseRequest.
     public double? Latitude { get; set; }
     public double? Longitude { get; set; }
 }

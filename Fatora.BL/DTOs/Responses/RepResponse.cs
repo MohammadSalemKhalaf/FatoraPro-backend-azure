@@ -13,5 +13,6 @@ public class RepResponse
     public bool IsHidden { get; set; }
     public string ProductAccessMode { get; set; } = string.Empty;
     public string CustomerAccessMode { get; set; } = string.Empty;
+    public bool CanEditStock { get; set; }
     public DateTime CreatedAt { get; set; }
 }

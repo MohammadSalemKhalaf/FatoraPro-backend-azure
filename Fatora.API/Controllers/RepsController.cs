@@ -145,6 +145,14 @@ public class RepsController(
     // and if so, how much, so the owner can decide with real information
     // instead of a blind "sync or discard".
     [Authorize(Roles = "SalesRep")]
+    [HttpPut("{id:guid}/stock-access")]
+    public async Task<IActionResult> SetStockAccess(Guid id, UpdateRepStockAccessRequest request)
+    {
+        var result = await repService.SetStockAccessAsync(User.GetUserId(), id, request);
+        return Ok(result);
+    }
+
+    [Authorize(Roles = "SalesRep")]
     [HttpGet("{id:guid}/pending-sync")]
     public async Task<IActionResult> GetPendingSync(Guid id)
     {

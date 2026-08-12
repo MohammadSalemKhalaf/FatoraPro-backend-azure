@@ -86,5 +86,14 @@ public class Rep
     public ProductAccessMode ProductAccessMode { get; set; } = ProductAccessMode.All;
     public CustomerAccessMode CustomerAccessMode { get; set; } = CustomerAccessMode.Own;
 
+    // Independent of ProductAccessMode - that controls which products a Rep
+    // can even see/touch at all, this controls one narrower thing within
+    // that: whether it may change a touchable product's StockQuantity, or
+    // only view it. Defaults true (today's behavior for every existing Rep)
+    // so this migration changes nothing until an owner deliberately turns it
+    // off. Enforced in ProductService.UpdateAsync and
+    // SyncService.PushProductAsync - never just a UI toggle.
+    public bool CanEditStock { get; set; } = true;
+
     public DateTime CreatedAt { get; set; }
 }

@@ -13,6 +13,7 @@ public class RepConfiguration : IEntityTypeConfiguration<Rep>
         builder.Property(x => x.IsActive).HasDefaultValue(true);
         builder.Property(x => x.ProductAccessMode).HasConversion<string>();
         builder.Property(x => x.CustomerAccessMode).HasConversion<string>();
+        builder.Property(x => x.CanEditStock).HasDefaultValue(true);
 
         builder.HasIndex(x => x.QrToken).IsUnique();
         builder.HasIndex(x => x.OwnerUserId);

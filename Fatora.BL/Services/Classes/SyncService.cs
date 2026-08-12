@@ -192,7 +192,27 @@ public class SyncService(AppDbContext dbContext) : ISyncService
             existing.Barcode = item.Barcode;
             existing.PurchasePrice = item.PurchasePrice;
             existing.SellPrice = item.SellPrice;
-            existing.StockQuantity = item.StockQuantity;
+
+            // Same CanEditStock boundary as ProductService.UpdateAsync - a
+            // rep with it off can still push every other field change for a
+            // product it's otherwise allowed to sync, just not a quantity
+            // change. Silently keeps the server's existing value rather than
+            // rejecting the whole item, matching how a stale/mistaken id is
+            // already handled elsewhere in this class (e.g.
+            // SetProductAccessAsync).
+            if (scopeToRepId is null || item.StockQuantity == existing.StockQuantity)
+            {
+                existing.StockQuantity = item.StockQuantity;
+            }
+            else
+            {
+                var callerRep = await dbContext.Reps.FirstOrDefaultAsync(r => r.Id == scopeToRepId);
+                if (callerRep is null || callerRep.CanEditStock)
+                {
+                    existing.StockQuantity = item.StockQuantity;
+                }
+            }
+
             existing.IsActive = item.IsActive;
             existing.UpdatedAt = item.UpdatedAt;
 

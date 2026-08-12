@@ -16,6 +16,7 @@ public interface IRepService
     Task<RepResponse> RegenerateQrAsync(Guid ownerUserId, Guid repId);
     Task<RepResponse> SetProductAccessAsync(Guid ownerUserId, Guid repId, UpdateRepProductAccessRequest request);
     Task<RepResponse> SetCustomerAccessAsync(Guid ownerUserId, Guid repId, UpdateRepCustomerAccessRequest request);
+    Task<RepResponse> SetStockAccessAsync(Guid ownerUserId, Guid repId, UpdateRepStockAccessRequest request);
     Task<RepAccessListResponse> GetProductAccessAsync(Guid ownerUserId, Guid repId);
     Task<RepAccessListResponse> GetCustomerAccessAsync(Guid ownerUserId, Guid repId);
 }

@@ -219,6 +219,16 @@ public class RepService(AppDbContext dbContext) : IRepService
         return ToResponse(rep, includeQrToken: false);
     }
 
+    public async Task<RepResponse> SetStockAccessAsync(Guid ownerUserId, Guid repId, UpdateRepStockAccessRequest request)
+    {
+        var rep = await FindOwnedRep(ownerUserId, repId);
+
+        rep.CanEditStock = request.CanEditStock;
+        await dbContext.SaveChangesAsync();
+
+        return ToResponse(rep, includeQrToken: false);
+    }
+
     public async Task<RepAccessListResponse> GetProductAccessAsync(Guid ownerUserId, Guid repId)
     {
         var rep = await FindOwnedRep(ownerUserId, repId);
@@ -264,6 +274,7 @@ public class RepService(AppDbContext dbContext) : IRepService
         IsHidden = rep.IsHidden,
         ProductAccessMode = rep.ProductAccessMode.ToString(),
         CustomerAccessMode = rep.CustomerAccessMode.ToString(),
+        CanEditStock = rep.CanEditStock,
         CreatedAt = rep.CreatedAt
     };
 }

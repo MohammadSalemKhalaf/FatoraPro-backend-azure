@@ -256,8 +256,8 @@ public class RepActivityService(AppDbContext dbContext) : IRepActivityService
                     Detail = pr.Status,
                     Amount = 0,
                     CreatedAt = pr.CreatedAt,
-                    Latitude = null,
-                    Longitude = null
+                    Latitude = pr.Latitude,
+                    Longitude = pr.Longitude
                 })
             )
             .OrderByDescending(item => item.CreatedAt)

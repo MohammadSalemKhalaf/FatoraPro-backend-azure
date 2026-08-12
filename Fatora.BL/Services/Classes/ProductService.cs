@@ -105,7 +105,25 @@ public class ProductService(AppDbContext dbContext) : IProductService
         product.PurchasePrice = request.PurchasePrice;
         product.SellPrice = request.SellPrice;
         product.Barcode = request.Barcode;
-        product.StockQuantity = request.StockQuantity;
+
+        // A Rep whose CanEditStock is off may still edit everything else
+        // about a product it's otherwise allowed to touch (see
+        // IsOwnRepCreation above) - this is narrower than the create/edit
+        // boundary, so the quantity in the request is silently ignored
+        // rather than rejecting the whole save. The owner (scopeToRepId is
+        // null) is never subject to this at all.
+        if (scopeToRepId is null || request.StockQuantity == product.StockQuantity)
+        {
+            product.StockQuantity = request.StockQuantity;
+        }
+        else
+        {
+            var callerRep = await dbContext.Reps.FirstOrDefaultAsync(r => r.Id == scopeToRepId);
+            if (callerRep is null || callerRep.CanEditStock)
+            {
+                product.StockQuantity = request.StockQuantity;
+            }
+        }
 
         await dbContext.SaveChangesAsync();
 
