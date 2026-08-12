@@ -21,12 +21,14 @@ public class PurchaseRequest
     // feed actually cares about. See PurchaseRequestsController.Save.
     public DateTime? SyncedAt { get; set; }
 
-    // Captured on the device at the moment this request was first created
-    // (see PurchaseRequestsController.Save's entity-is-null branch) - null
-    // when location permission was never granted or the device was offline
-    // at that moment. Set once, at creation, and never overwritten by a
-    // later edit-save - same "where did this activity begin" semantics as
-    // Order.Latitude/Longitude.
+    // Captured on the device the first time this request actually becomes
+    // real activity - preparing or ready, never a draft (see
+    // PurchaseRequestsController.Save) - null when location permission was
+    // never granted, the device was offline at that moment, or the request
+    // never left draft. Set once and never overwritten by a later
+    // edit-save - same "where did this activity begin" semantics as
+    // Order.Latitude/Longitude, just anchored to a later moment for this
+    // entity specifically.
     public double? Latitude { get; set; }
     public double? Longitude { get; set; }
     public List<PurchaseRequestItem> Items { get; set; } = [];

@@ -47,11 +47,19 @@ public class PurchaseRequestsController(AppDbContext db) : ControllerBase
         if (entity is null)
         {
             entity = new PurchaseRequest { Id = id, UserId = ownerId, CreatedByRepId = repId,
-                CreatedAt = request.CreatedAt.ToUniversalTime(),
-                // Same "set once, at creation" semantics as Order/Receipt -
-                // never touched again on a later edit-save.
-                Latitude = request.Latitude, Longitude = request.Longitude };
+                CreatedAt = request.CreatedAt.ToUniversalTime() };
             db.PurchaseRequests.Add(entity);
+        }
+        // Set once, whenever the device first actually has a value to offer -
+        // never at draft (the app no longer even tries then), typically the
+        // preparing/ready transition instead. Never overwritten once set,
+        // same "set once" semantics as Order/Receipt, just not tied to the
+        // literal creation branch above since that's no longer when it
+        // first arrives.
+        if (entity.Latitude is null && entity.Longitude is null)
+        {
+            entity.Latitude = request.Latitude;
+            entity.Longitude = request.Longitude;
         }
         entity.CustomerId = request.CustomerId;
         entity.Status = request.Status;
