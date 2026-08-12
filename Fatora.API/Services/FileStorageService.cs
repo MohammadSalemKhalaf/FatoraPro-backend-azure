@@ -1,9 +1,27 @@
+using System.Text.RegularExpressions;
+using CloudinaryDotNet;
+using CloudinaryDotNet.Actions;
 using Fatora.BL.Exceptions;
 
 namespace Fatora.API.Services;
 
-public class FileStorageService(IWebHostEnvironment webHostEnvironment) : IFileStorageService
+// Render's free tier gives the container an ephemeral filesystem - anything
+// written to local disk (the old wwwroot/uploads approach) is wiped on
+// every redeploy and on every spin-down/spin-up cycle. Cloudinary is the
+// actual persistent store; nothing here ever touches local disk.
+public partial class FileStorageService : IFileStorageService
 {
+    private readonly Cloudinary _cloudinary;
+
+    public FileStorageService(IConfiguration configuration)
+    {
+        var account = new Account(
+            configuration["CLOUDINARY_CLOUD_NAME"],
+            configuration["CLOUDINARY_API_KEY"],
+            configuration["CLOUDINARY_API_SECRET"]);
+        _cloudinary = new Cloudinary(account) { Api = { Secure = true } };
+    }
+
     private static readonly HashSet<string> AllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".jpg", ".jpeg", ".png", ".webp", ".gif"
@@ -11,7 +29,7 @@ public class FileStorageService(IWebHostEnvironment webHostEnvironment) : IFileS
 
     private const long MaxFileSizeBytes = 5 * 1024 * 1024; // 5 MB
 
-    public async Task<string> SaveImageAsync(IFormFile file, string subFolder, string? previousRelativeUrl = null)
+    public async Task<string> SaveImageAsync(IFormFile file, Guid ownerId, string subFolder, string? previousRelativeUrl = null)
     {
         if (file is null || file.Length == 0)
         {
@@ -35,49 +53,68 @@ public class FileStorageService(IWebHostEnvironment webHostEnvironment) : IFileS
             throw new BadRequestException("Uploaded file is not a valid image.");
         }
 
-        var webRootPath = webHostEnvironment.WebRootPath ?? Path.Combine(webHostEnvironment.ContentRootPath, "wwwroot");
-        var folderPath = Path.Combine(webRootPath, "uploads", subFolder);
-        Directory.CreateDirectory(folderPath);
-
-        var fileName = $"{Guid.NewGuid()}{extension}";
-        var filePath = Path.Combine(folderPath, fileName);
-
-        await using (var stream = new FileStream(filePath, FileMode.Create))
+        await using var stream = file.OpenReadStream();
+        var uploadParams = new ImageUploadParams
         {
-            await file.CopyToAsync(stream);
+            File = new FileDescription(file.FileName, stream),
+            // Scoped per business, not just by asset type - keeps every
+            // tenant's assets cleanly separated (auditing, per-tenant
+            // export/backup, and bulk cleanup if a business's account is
+            // ever closed all become a single well-defined folder instead
+            // of a filtered search across everyone's images).
+            Folder = $"fatora/{ownerId}/{subFolder}",
+            PublicId = Guid.NewGuid().ToString(),
+            Overwrite = false
+        };
+
+        var result = await _cloudinary.UploadAsync(uploadParams);
+
+        if (result.Error is not null)
+        {
+            throw new BadRequestException($"Image upload failed: {result.Error.Message}");
         }
 
-        DeletePreviousFile(webRootPath, previousRelativeUrl);
+        await DeletePreviousFileAsync(previousRelativeUrl);
 
-        return $"/uploads/{subFolder}/{fileName}";
+        return result.SecureUrl.ToString();
     }
 
-    public Task DeleteImageAsync(string relativeUrl)
-    {
-        var webRootPath = webHostEnvironment.WebRootPath ?? Path.Combine(webHostEnvironment.ContentRootPath, "wwwroot");
-        DeletePreviousFile(webRootPath, relativeUrl);
-        return Task.CompletedTask;
-    }
+    public Task DeleteImageAsync(string relativeUrl) => DeletePreviousFileAsync(relativeUrl);
 
-    private static void DeletePreviousFile(string webRootPath, string? previousRelativeUrl)
+    // Old (pre-Cloudinary) rows still hold a local "/uploads/..." path - those
+    // files no longer exist anywhere and never will again, so there is
+    // nothing to delete for them; only a real Cloudinary URL is ever acted
+    // on here.
+    private async Task DeletePreviousFileAsync(string? previousUrl)
     {
-        if (string.IsNullOrWhiteSpace(previousRelativeUrl))
+        if (string.IsNullOrWhiteSpace(previousUrl))
+        {
+            return;
+        }
+
+        var publicId = ExtractPublicId(previousUrl);
+
+        if (publicId is null)
         {
             return;
         }
 
         try
         {
-            var previousPath = Path.Combine(webRootPath, previousRelativeUrl.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
-
-            if (File.Exists(previousPath))
-            {
-                File.Delete(previousPath);
-            }
+            await _cloudinary.DestroyAsync(new DeletionParams(publicId));
         }
-        catch (IOException)
+        catch (Exception)
         {
-            // Best-effort cleanup; failing to delete the old file should not block the new upload.
+            // Best-effort cleanup; failing to delete the old asset should not block the new upload.
         }
+    }
+
+    [GeneratedRegex(@"/upload/(?:v\d+/)?(?<publicId>.+)\.[a-zA-Z0-9]+$")]
+    private static partial Regex CloudinaryPublicIdPattern();
+
+    private static string? ExtractPublicId(string url)
+    {
+        var match = CloudinaryPublicIdPattern().Match(url);
+        return match.Success ? match.Groups["publicId"].Value : null;
     }
 }

@@ -51,7 +51,7 @@ public class ProfileController(
     {
         var userId = User.GetUserId();
         var currentLogoUrl = await userService.GetLogoUrlAsync(userId);
-        var logoUrl = await fileStorageService.SaveImageAsync(file, "logos", currentLogoUrl);
+        var logoUrl = await fileStorageService.SaveImageAsync(file, userId, "logos", currentLogoUrl);
         var result = await userService.UpdateLogoAsync(userId, logoUrl);
         return Ok(result);
     }

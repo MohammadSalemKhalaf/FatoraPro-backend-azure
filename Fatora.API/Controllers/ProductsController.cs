@@ -84,9 +84,10 @@ public class ProductsController(
     [HttpPost("{id:guid}/image")]
     public async Task<IActionResult> UploadImage(Guid id, IFormFile file)
     {
-        var product = await productService.GetByIdAsync(User.GetEffectiveOwnerId(), id);
-        var imageUrl = await fileStorageService.SaveImageAsync(file, "products", product.ImageUrl);
-        var result = await productService.UpdateImageAsync(User.GetEffectiveOwnerId(), id, imageUrl);
+        var ownerId = User.GetEffectiveOwnerId();
+        var product = await productService.GetByIdAsync(ownerId, id);
+        var imageUrl = await fileStorageService.SaveImageAsync(file, ownerId, "products", product.ImageUrl);
+        var result = await productService.UpdateImageAsync(ownerId, id, imageUrl);
         return Ok(result);
     }
 

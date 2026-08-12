@@ -44,7 +44,7 @@ It is intentionally simple: fast to use in the field, and free of features (tax 
 | Password hashing | `PasswordHasher<T>` |
 | Validation | FluentValidation + DataAnnotations |
 | Error handling | Custom exception hierarchy → RFC 7807 `ProblemDetails` |
-| File storage | Local disk (`wwwroot/uploads`) |
+| File storage | Cloudinary (per-business folders: `fatora/{userId}/{products,logos}`) |
 | Email | Gmail SMTP — Admin password-recovery OTP only, not used for SalesReps |
 | Containerization | Docker (see [Deployment](#deployment)) |
 
@@ -274,4 +274,4 @@ Migrations and admin seeding run automatically on startup — no manual migratio
 
 `AdminRecovery:Email` (the destination address for OTP codes) is not sensitive and can stay in `appsettings.json`.
 
-**Known limitation:** uploaded product/logo images are stored on local disk (`wwwroot/uploads/`). Most PaaS free/default tiers use an ephemeral filesystem, so uploaded files are lost on redeploy unless a persistent volume is attached.
+Product/logo images are stored in Cloudinary (`Fatora.API/Services/FileStorageService.cs`), not on local disk - Render's free tier gives the container an ephemeral filesystem, so anything written locally is lost on every redeploy and on every spin-down/spin-up cycle. Each business's assets live under their own `fatora/{userId}/...` folder. Requires three environment variables: `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` (same pattern as `SMTP_PASSWORD` above - never committed, read straight from the environment).
