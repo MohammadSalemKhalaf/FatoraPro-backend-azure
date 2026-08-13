@@ -62,11 +62,32 @@ public class AdminRecoveryService(
 
         await dbContext.SaveChangesAsync();
 
+        // Fired, not awaited. The code already exists and is already valid
+        // the moment the save above completes - the caller's request is
+        // meaningfully done at that point, regardless of how long Gmail's
+        // relay takes to accept the message. Awaiting it here tied the HTTP
+        // response, and so the app's loading spinner, to that delivery time,
+        // which was observed hanging for minutes. Best-effort: EmailService
+        // now carries its own timeout, and a delivery failure has nothing
+        // useful to recover into here anyway - the response already reads
+        // "sent" either way, since that's what stays true from the outside.
         var recoveryEmail = configuration["AdminRecovery:Email"]!;
-        await emailService.SendAsync(
-            recoveryEmail,
-            "Fatora Admin Password Reset Code",
-            $"Your password reset code is: {code}\nThis code expires in 10 minutes and can only be used once.");
+        _ = SendResetCodeEmailAsync(recoveryEmail, code);
+    }
+
+    private async Task SendResetCodeEmailAsync(string recoveryEmail, string code)
+    {
+        try
+        {
+            await emailService.SendAsync(
+                recoveryEmail,
+                "Fatora Admin Password Reset Code",
+                $"Your password reset code is: {code}\nThis code expires in 10 minutes and can only be used once.");
+        }
+        catch
+        {
+            // Swallowed deliberately - see the comment at the call site.
+        }
     }
 
     public async Task ResetPasswordWithOtpAsync(string userName, string otp, string newPassword)

@@ -23,7 +23,14 @@ public class EmailService(IConfiguration configuration) : IEmailService
         using var client = new SmtpClient(SmtpHost, SmtpPort)
         {
             EnableSsl = true,
-            Credentials = new NetworkCredential(fromEmail, password)
+            Credentials = new NetworkCredential(fromEmail, password),
+
+            // Explicit rather than SmtpClient's 100s default - a slow or
+            // stalled connection to Gmail from the host's network should fail
+            // fast and predictably, not hang for an unbounded, observed-in-
+            // production multi-minute stretch that AdminRecoveryService would
+            // otherwise sit blocked on.
+            Timeout = 15000
         };
 
         using var message = new MailMessage(fromEmail, to, subject, body);
