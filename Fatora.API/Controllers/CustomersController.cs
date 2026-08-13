@@ -72,6 +72,7 @@ public class CustomersController(
         return Ok(result);
     }
 
+    [Authorize(Roles = "SalesRep")]
     [HttpPost("{id:guid}/restore")]
     public async Task<IActionResult> Restore(Guid id)
     {
@@ -79,6 +80,14 @@ public class CustomersController(
         return Ok(result);
     }
 
+    // Owner-only, matching ProductsController's identical pair and
+    // OrdersController.Delete: this is a real hard delete, and Customer is the
+    // FK parent of Orders and Receipts with cascade behaviour, so a Rep
+    // reaching it would take that customer's whole invoice and payment history
+    // with it - including rows the owner or another rep created. Enforced
+    // here, not just hidden in the UI (the Flutter client only ever
+    // soft-deletes).
+    [Authorize(Roles = "SalesRep")]
     [HttpDelete("{id:guid}/permanent")]
     public async Task<IActionResult> PermanentDelete(Guid id)
     {

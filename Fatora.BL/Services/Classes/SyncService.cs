@@ -148,7 +148,7 @@ public class SyncService(AppDbContext dbContext) : ISyncService
         }
         catch (Exception ex)
         {
-            return new SyncItemResult(item.Id, "Rejected", ex.Message);
+            return Reject(item.Id, ex);
         }
     }
 
@@ -166,7 +166,7 @@ public class SyncService(AppDbContext dbContext) : ISyncService
                     Name = item.Name,
                     Description = item.Description,
                     ImageUrl = item.ImageUrl,
-                    Barcode = item.Barcode,
+                    Barcode = await ResolveSyncBarcodeAsync(userId, item.Barcode, item.Id, fallback: null),
                     PurchasePrice = item.PurchasePrice,
                     SellPrice = item.SellPrice,
                     StockQuantity = item.StockQuantity,
@@ -211,7 +211,7 @@ public class SyncService(AppDbContext dbContext) : ISyncService
             existing.Name = item.Name;
             existing.Description = item.Description;
             existing.ImageUrl = item.ImageUrl;
-            existing.Barcode = item.Barcode;
+            existing.Barcode = await ResolveSyncBarcodeAsync(userId, item.Barcode, item.Id, fallback: existing.Barcode);
             existing.PurchasePrice = item.PurchasePrice;
             existing.SellPrice = item.SellPrice;
 
@@ -243,7 +243,7 @@ public class SyncService(AppDbContext dbContext) : ISyncService
         }
         catch (Exception ex)
         {
-            return new SyncItemResult(item.Id, "Rejected", ex.Message);
+            return Reject(item.Id, ex);
         }
     }
 
@@ -375,6 +375,58 @@ public class SyncService(AppDbContext dbContext) : ISyncService
                 return new SyncItemResult(item.Id, "Rejected", "Cannot edit an invoice that has been marked as returned.");
             }
 
+            // A push whose only change is money collected against this invoice
+            // (OrdersRepository.recordPayment/markAsPaid) or the administrative
+            // "covered by general receipts" flag
+            // (OrdersRepository.settleOutstandingForCustomer) - neither of which
+            // touches what the invoice actually *says* - is handled here,
+            // deliberately ahead of the two edit gates below. Those gates exist
+            // to stop an invoice's *contents* being rewritten after money moved,
+            // which the check below has already established did not happen.
+            //
+            // Routing these through the generic edit path instead is what made
+            // the second and every later payment permanently Rejected (the first
+            // slips through only because PaidAmount is still 0 server-side at
+            // that point). A Rejected row deliberately stays dirty client-side
+            // (SyncManager._applyPushResults), so it re-pushed and re-failed
+            // every sync round for the life of the install while the collected
+            // cash never reached the server - and pull skips dirty rows, so it
+            // was frozen out of server state too.
+            var isPaymentOnlyChange = existing.CustomerId == item.CustomerId
+                && existing.Discount == item.Discount
+                && existing.CashDiscount == item.CashDiscount
+                && existing.DueDate == item.DueDate
+                && existing.Notes == item.Notes
+                && existing.IsDeleted == item.IsDeleted
+                && OrderService.OrderItemsMatch(existing.OrderItems, item.Items.Select(i => (i.ProductId, i.Quantity, i.UnitPrice)));
+
+            if (isPaymentOnlyChange)
+            {
+                // Raised, never assigned. Both fields only ever move one way on
+                // the device (recordPayment writes paidAmount + amount;
+                // settleOutstandingForCustomer only ever sets the flag), so a
+                // lower or false value on the wire is always a stale device,
+                // never an intent - and a payment, unlike an edit, carries no
+                // way to tell those apart. Two devices legitimately hold the
+                // same invoice, since the owner pulls every rep-created order
+                // and collects through this same local-first path: assigning
+                // would let a rep who last pulled before the owner collected
+                // overwrite the owner's payment with their own and report
+                // "Applied". Max merges the two instead of losing one.
+                //
+                // Min against Total holds the same RemainingBalance >= 0
+                // invariant OrderService.RecordPaymentAsync enforces. The device
+                // can legitimately overshoot by up to AmountTolerance, since
+                // recordPayment accepts an amount within 0.01 of the remaining
+                // balance - rejecting that would strand the row dirty forever,
+                // the precise failure this branch exists to remove.
+                existing.PaidAmount = Math.Min(Math.Max(existing.PaidAmount, item.PaidAmount), existing.Total);
+                existing.CoveredByReceipt = existing.CoveredByReceipt || item.CoveredByReceipt;
+                existing.UpdatedAt = item.UpdatedAt;
+                await dbContext.SaveChangesAsync();
+                return new SyncItemResult(item.Id, "Applied");
+            }
+
             // Mirrors OrderService.UpdateAsync's same rule - the client is expected to block this
             // locally before it ever reaches here (see OrdersRepository.update), so this is a
             // backstop against a stale/offline edit that started before the order received a
@@ -408,9 +460,33 @@ public class SyncService(AppDbContext dbContext) : ISyncService
                 || existing.CashDiscount != item.CashDiscount
                 || !OrderService.OrderItemsMatch(existing.OrderItems, item.Items.Select(i => (i.ProductId, i.Quantity, i.UnitPrice)));
 
+            // Built and validated before anything below is touched. These two
+            // are pure construction - nothing reaches the change tracker until
+            // the RemoveRange/AddRange further down - which lets
+            // ValidateCashDiscount run while this method can still walk away
+            // cleanly. It used to run last, after the field assignments, the
+            // reissued invoice number, the line-item swap and both stock
+            // passes, so a rejected cash discount left every one of those
+            // staged on the shared DbContext for the next item's save to
+            // commit: an invoice edited into a state the client was told had
+            // been Rejected.
+            var previousItems = existing.OrderItems.ToList();
+            var newItems = item.Items.Select(i => new OrderItem
+            {
+                OrderId = existing.Id,
+                ProductId = i.ProductId,
+                Product = newProductsById[i.ProductId],
+                Quantity = i.Quantity,
+                UnitPrice = i.UnitPrice,
+                IsEdited = OrderService.ResolveItemIsEdited(previousItems, i.ProductId, i.Quantity, i.UnitPrice)
+            }).ToList();
+
+            OrderService.ValidateCashDiscount(newItems, item.Discount, item.CashDiscount);
+
             existing.CustomerId = newCustomer.Id;
             existing.DueDate = item.DueDate;
             existing.Discount = item.Discount;
+            existing.CashDiscount = item.CashDiscount;
             existing.Notes = item.Notes;
             existing.PaidAmount = item.PaidAmount;
             existing.CoveredByReceipt = item.CoveredByReceipt;
@@ -439,17 +515,7 @@ public class SyncService(AppDbContext dbContext) : ISyncService
             // Managed directly through the DbSet (not via the existing.OrderItems navigation setter) -
             // replacing a required collection navigation by reassigning it confuses EF's change tracker
             // into generating an UPDATE against the row it just DELETEd instead of an INSERT.
-            var previousItems = existing.OrderItems.ToList();
             dbContext.OrderItems.RemoveRange(existing.OrderItems);
-            var newItems = item.Items.Select(i => new OrderItem
-            {
-                OrderId = existing.Id,
-                ProductId = i.ProductId,
-                Product = newProductsById[i.ProductId],
-                Quantity = i.Quantity,
-                UnitPrice = i.UnitPrice,
-                IsEdited = OrderService.ResolveItemIsEdited(previousItems, i.ProductId, i.Quantity, i.UnitPrice)
-            }).ToList();
             dbContext.OrderItems.AddRange(newItems);
 
             foreach (var lineItem in item.Items)
@@ -457,16 +523,54 @@ public class SyncService(AppDbContext dbContext) : ISyncService
                 AdjustStock(newProductsById[lineItem.ProductId], -lineItem.Quantity);
             }
 
-            OrderService.ValidateCashDiscount(newItems, item.Discount, item.CashDiscount);
-            existing.CashDiscount = item.CashDiscount;
-
             await dbContext.SaveChangesAsync();
             return new SyncItemResult(item.Id, "Applied");
         }
         catch (Exception ex)
         {
-            return new SyncItemResult(item.Id, "Rejected", ex.Message);
+            return Reject(item.Id, ex);
         }
+    }
+
+    // ProductService guards every REST create/update with
+    // EnsureBarcodeAvailableAsync; this path had no equivalent, so a barcode
+    // already used by another product reached the unique index and threw a
+    // DbUpdateException - which, before Reject cleared the tracker, poisoned
+    // the rest of the batch, and either way left the row Rejected and so
+    // permanently dirty on the device, re-pushed and re-failed forever.
+    //
+    // Degraded rather than rejected, mirroring how the CanEditStock boundary
+    // below already handles a change this session isn't allowed to make: the
+    // product itself still syncs with every other field applied, and only the
+    // duplicate barcode - which was never storable anyway - is dropped in
+    // favour of the fallback. Rejecting the whole item instead would strand a
+    // real product on one device forever over a scanning convenience field.
+    private async Task<string?> ResolveSyncBarcodeAsync(Guid userId, string? barcode, Guid productId, string? fallback)
+    {
+        if (string.IsNullOrWhiteSpace(barcode)) return barcode;
+
+        var taken = await dbContext.Products
+            .AnyAsync(p => p.UserId == userId && p.Barcode == barcode && p.Id != productId);
+
+        return taken ? fallback : barcode;
+    }
+
+    // Every Push*Async catch routes through here, because rejecting one item
+    // is only half the job: the four push loops share this one scoped
+    // DbContext, so whatever the failed item already staged (a half-applied
+    // edit, a burned User.NextInvoiceNumber, an INSERT that violated a unique
+    // index) is still sitting in the change tracker in Added/Modified state.
+    // The next item's SaveChangesAsync would flush it - re-issuing the same
+    // failing statement and so rejecting every remaining item in the batch,
+    // or worse, silently committing an edit this method just told the client
+    // was Rejected. Clearing restores the per-item isolation SyncController
+    // and SyncPushRequestValidator both document as guaranteed. Safe to clear
+    // wholesale here: every success path saves before it returns, so nothing
+    // legitimate is ever pending at this point.
+    private SyncItemResult Reject(Guid id, Exception ex)
+    {
+        dbContext.ChangeTracker.Clear();
+        return new SyncItemResult(id, "Rejected", ex.Message);
     }
 
     // Never validated/clamped here - see Product.StockQuantity and the note
@@ -537,7 +641,7 @@ public class SyncService(AppDbContext dbContext) : ISyncService
         }
         catch (Exception ex)
         {
-            return new SyncItemResult(item.Id, "Rejected", ex.Message);
+            return Reject(item.Id, ex);
         }
     }
 

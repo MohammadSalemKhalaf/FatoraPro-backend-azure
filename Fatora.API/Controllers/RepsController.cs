@@ -5,6 +5,7 @@ using Fatora.BL.Services.Abstractions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Fatora.API.Controllers;
 
@@ -205,6 +206,7 @@ public class RepsController(
     // this is the one action on this controller anyone can call before
     // being signed in at all.
     [AllowAnonymous]
+    [EnableRateLimiting(RateLimitPolicies.SignIn)]
     [HttpPost("login-by-qr")]
     public async Task<IActionResult> LoginByQr(RepLoginRequest request)
     {

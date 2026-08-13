@@ -6,6 +6,7 @@ using Fatora.BL.Services.Abstractions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Fatora.API.Controllers;
 
@@ -36,6 +37,7 @@ public class AccountController(
         return StatusCode(StatusCodes.Status201Created, result);
     }
 
+    [EnableRateLimiting(RateLimitPolicies.SignIn)]
     [HttpPost("login")]
     public async Task<IActionResult> login(LoginRequest request)
     {
@@ -92,6 +94,7 @@ public class AccountController(
         return NoContent();
     }
 
+    [EnableRateLimiting(RateLimitPolicies.PasswordRecovery)]
     [HttpPost("forgot-password")]
     public async Task<IActionResult> ForgotPassword(AdminForgotPasswordRequest request)
     {
@@ -107,6 +110,7 @@ public class AccountController(
         return NoContent();
     }
 
+    [EnableRateLimiting(RateLimitPolicies.PasswordRecovery)]
     [HttpPost("reset-password")]
     public async Task<IActionResult> ResetPasswordWithOtp(AdminResetPasswordRequest request)
     {

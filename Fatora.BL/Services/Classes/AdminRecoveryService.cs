@@ -17,6 +17,15 @@ public class AdminRecoveryService(
 {
     private static readonly TimeSpan OtpLifetime = TimeSpan.FromMinutes(10);
 
+    // A 6-digit code is only defensible because guessing is bounded on both
+    // axes: at most one code is ever live for a user (older ones are retired
+    // the moment a new one is issued, so N codes can never share the 9x10^5
+    // keyspace - GetInt32(100000, 1000000) never emits a leading zero - and
+    // collapse it to ~9x10^5/N), and each one dies after this many wrong
+    // guesses. Re-opening the window costs an attacker a fresh
+    // forgot-password call, which is rate-limited at the endpoint.
+    private const int MaxVerificationAttempts = 5;
+
     public async Task RequestPasswordResetAsync(string userName)
     {
         var user = await dbContext.Users.FirstOrDefaultAsync(u => u.UserName == userName && u.Role == Role.Admin);
@@ -28,12 +37,25 @@ public class AdminRecoveryService(
             return;
         }
 
+        // Retire anything still outstanding before issuing. Without this, every
+        // call stacked another independently-valid code and the verification
+        // query below would match any one of them - so flooding this endpoint
+        // shrank the search space by exactly the number of calls made.
+        var outstanding = await dbContext.PasswordResetOtps
+            .Where(o => o.UserId == user.Id && !o.Used)
+            .ToListAsync();
+
+        foreach (var previous in outstanding)
+        {
+            previous.Used = true;
+        }
+
         var code = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
 
         dbContext.PasswordResetOtps.Add(new PasswordResetOtp
         {
             UserId = user.Id,
-            Code = code,
+            CodeHash = HashCode(code),
             ExpiresOnUtc = DateTime.UtcNow.Add(OtpLifetime),
             Used = false
         });
@@ -58,13 +80,34 @@ public class AdminRecoveryService(
             throw new UnauthorizedException("Invalid or expired code.");
         }
 
+        // Fetched by owner rather than by code, because the code is stored
+        // hashed and the comparison has to happen in memory - which is also
+        // what makes it possible to count a wrong guess against the row.
+        // RequestPasswordResetAsync guarantees at most one is outstanding.
         var resetOtp = await dbContext.PasswordResetOtps
-            .Where(o => o.UserId == user.Id && o.Code == otp && !o.Used && o.ExpiresOnUtc > DateTime.UtcNow)
+            .Where(o => o.UserId == user.Id && !o.Used && o.ExpiresOnUtc > DateTime.UtcNow)
             .OrderByDescending(o => o.Id)
             .FirstOrDefaultAsync();
 
         if (resetOtp is null)
         {
+            throw new UnauthorizedException("Invalid or expired code.");
+        }
+
+        if (!CryptographicOperations.FixedTimeEquals(
+                Convert.FromHexString(HashCode(otp)),
+                Convert.FromHexString(resetOtp.CodeHash)))
+        {
+            resetOtp.AttemptCount++;
+
+            // Burn the code rather than merely counting - leaving it alive
+            // would let the attacker keep guessing against the same one.
+            if (resetOtp.AttemptCount >= MaxVerificationAttempts)
+            {
+                resetOtp.Used = true;
+            }
+
+            await dbContext.SaveChangesAsync();
             throw new UnauthorizedException("Invalid or expired code.");
         }
 
@@ -76,4 +119,7 @@ public class AdminRecoveryService(
 
         await dbContext.SaveChangesAsync();
     }
+
+    private static string HashCode(string code) =>
+        Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(code)));
 }

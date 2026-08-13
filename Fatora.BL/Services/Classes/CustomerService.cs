@@ -118,6 +118,21 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
             throw new NotFoundException(nameof(Customer), id);
         }
 
+        // Unlike a product, Customer is the FK parent of Orders and Receipts,
+        // both configured to cascade - so this Remove would silently take the
+        // customer's entire invoice and payment history with it, the one thing
+        // in this system that must never be destroyable as a side effect of
+        // tidying up a contact. Archiving (DeleteAsync) is the supported way to
+        // get a customer out of the way; a permanent delete stays available
+        // only for one that never traded.
+        var hasHistory = await dbContext.Orders.AnyAsync(o => o.CustomerId == id)
+            || await dbContext.Receipts.AnyAsync(r => r.CustomerId == id);
+
+        if (hasHistory)
+        {
+            throw new ConflictException("لا يمكن حذف عميل له فواتير أو سندات قبض نهائيًا - قم بأرشفته بدلًا من ذلك.");
+        }
+
         dbContext.Customers.Remove(customer);
         await dbContext.SaveChangesAsync();
     }
