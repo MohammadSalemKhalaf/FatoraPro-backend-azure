@@ -89,12 +89,27 @@ public class ProductService(AppDbContext dbContext) : IProductService
     {
         var product = await FindOwnedActiveProduct(userId, id);
 
-        // A Rep can only ever edit a product it created itself - never one
-        // it merely has read access to (via RepProductAccess or the owner's
-        // own catalog), same distinction as the create-time restriction.
-        if (product is null || !IsOwnRepCreation(product, scopeToRepId))
+        if (product is null)
         {
             throw new NotFoundException(nameof(Product), id);
+        }
+
+        var isOwnRepCreation = IsOwnRepCreation(product, scopeToRepId);
+        Rep? callerRep = null;
+        if (!isOwnRepCreation)
+        {
+            callerRep = await dbContext.Reps.FirstOrDefaultAsync(r => r.Id == scopeToRepId);
+            if (callerRep is null || !callerRep.CanEditStock ||
+                !await IsVisibleToRepAsync(id, scopeToRepId))
+            {
+                throw new NotFoundException(nameof(Product), id);
+            }
+
+            // Stock access never grants catalog editing. For a visible
+            // product created by someone else, change the quantity only.
+            product.StockQuantity = request.StockQuantity;
+            await dbContext.SaveChangesAsync();
+            return ToResponse(product);
         }
 
         await EnsureBarcodeAvailableAsync(userId, request.Barcode, excludingProductId: id);
@@ -118,7 +133,7 @@ public class ProductService(AppDbContext dbContext) : IProductService
         }
         else
         {
-            var callerRep = await dbContext.Reps.FirstOrDefaultAsync(r => r.Id == scopeToRepId);
+            callerRep ??= await dbContext.Reps.FirstOrDefaultAsync(r => r.Id == scopeToRepId);
             if (callerRep is null || callerRep.CanEditStock)
             {
                 product.StockQuantity = request.StockQuantity;

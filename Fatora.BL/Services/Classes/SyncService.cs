@@ -186,6 +186,28 @@ public class SyncService(AppDbContext dbContext) : ISyncService
                 return new SyncItemResult(item.Id, "Conflict", "Server has a newer or equal version; pull to reconcile.");
             }
 
+            // Stock permission covers every visible product, regardless of
+            // creator, but grants no catalog-field editing.
+            if (scopeToRepId is { } stockRepId && existing.CreatedByRepId != stockRepId)
+            {
+                var stockRep = await dbContext.Reps.FirstOrDefaultAsync(r => r.Id == stockRepId);
+                var visible = stockRep?.ProductAccessMode switch
+                {
+                    ProductAccessMode.All => true,
+                    ProductAccessMode.RepOwnedOnly => false,
+                    ProductAccessMode.Selected => await dbContext.RepProductAccesses
+                        .AnyAsync(a => a.RepId == stockRepId && a.ProductId == existing.Id),
+                    _ => false
+                };
+                if (stockRep is null || !stockRep.CanEditStock || !visible)
+                    return new SyncItemResult(item.Id, "Rejected", "Stock access denied.");
+
+                existing.StockQuantity = item.StockQuantity;
+                existing.UpdatedAt = item.UpdatedAt;
+                await dbContext.SaveChangesAsync();
+                return new SyncItemResult(item.Id, "Applied");
+            }
+
             existing.Name = item.Name;
             existing.Description = item.Description;
             existing.ImageUrl = item.ImageUrl;
