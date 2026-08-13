@@ -10,6 +10,11 @@ public class RepRefreshToken
     public int Id { get; set; }
     public string Token { get; set; }
     public DateTime ExpiresOnUtc { get; set; }
+
+    // See RefreshToken.ReplacedAtUtc - same grace-window reasoning, applied
+    // to a Rep's own refresh token.
+    public DateTime? ReplacedAtUtc { get; set; }
+
     public Guid RepId { get; set; }
     public Rep Rep { get; set; }
 

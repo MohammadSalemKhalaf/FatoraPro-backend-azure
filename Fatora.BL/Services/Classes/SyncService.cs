@@ -135,6 +135,31 @@ public class SyncService(AppDbContext dbContext) : ISyncService
                 return new SyncItemResult(item.Id, "Conflict", "Server has a newer or equal version; pull to reconcile.");
             }
 
+            // The Flutter client never calls PUT/DELETE /customers/{id}
+            // directly - CustomersRepository.update/delete are local-first,
+            // landing in SQLite and reaching the server only through this
+            // path. So this is the check that actually matters, not the one
+            // on CustomersController's REST actions (kept for defense in
+            // depth, in case anything ever calls them directly).
+            //
+            // An IsActive transition (either direction - archiving or
+            // restoring) is owner-only, matching
+            // CustomersController.Delete/Restore's own [Authorize] guard,
+            // full stop - even a Rep editing a customer it created itself
+            // may never flip this.
+            if (scopeToRepId is not null && item.IsActive != existing.IsActive)
+            {
+                return new SyncItemResult(item.Id, "Rejected", "Only the account owner can delete or restore a customer.");
+            }
+
+            // Anything else is an ordinary field edit, gated the same way
+            // CustomerService.UpdateAsync gates it: own creation only,
+            // regardless of what CustomerAccessMode otherwise makes visible.
+            if (!CustomerService.IsOwnRepCreation(existing, scopeToRepId))
+            {
+                return new SyncItemResult(item.Id, "Rejected", "Cannot edit a customer this rep did not create.");
+            }
+
             existing.Name = item.Name;
             existing.StoreName = item.StoreName;
             existing.PhoneNumber = item.PhoneNumber;

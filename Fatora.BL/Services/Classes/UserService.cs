@@ -28,6 +28,16 @@ public static class AccountStatusErrorCodes
     // SubAdmin has no subscription of its own to expire - see SubAdmin.cs).
     public const string SubAdminSessionEnded = "SUBADMIN_SESSION_ENDED";
 
+    // A refresh token that's genuinely gone - never existed, past its 7-day
+    // expiry, or past JwtTokenProviderService.RefreshRotationGrace after
+    // being superseded. Attached to every "Invalid or expired refresh
+    // token" rejection across all three token kinds (User/Rep/SubAdmin) so
+    // the frontend can route it through the same clear, visible
+    // "session ended, log in again" handling the other codes above already
+    // get, instead of the generic-401 fallback that used to leave the app
+    // silently holding dead tokens with no signal to log out at all.
+    public const string SessionExpired = "SESSION_EXPIRED";
+
     public static string For(string accountStatus) =>
         accountStatus == "Suspended" ? AccountSuspended : TrialExpired;
 }

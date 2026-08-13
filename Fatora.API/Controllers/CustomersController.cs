@@ -58,6 +58,16 @@ public class CustomersController(
         return Ok(result);
     }
 
+    // Owner-only - unlike Update, this is never "own creation only" for a
+    // Rep, it's blocked outright even on a customer the Rep created itself.
+    // A customer's statement/debt view degrades the moment it's archived
+    // (see CustomerService.PermanentDeleteAsync's related cascade concern
+    // for the equally destructive hard-delete case), and that's a call only
+    // the owner gets to make - not something a sub-account discovers by
+    // tidying up its own contact list. Enforced here, not just hidden in the
+    // UI. Mirrored in SyncService.PushCustomerAsync, the path the app
+    // actually uses for this in normal (offline-first) operation.
+    [Authorize(Roles = "SalesRep")]
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id)
     {

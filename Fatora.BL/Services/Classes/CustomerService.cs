@@ -55,7 +55,14 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
     {
         var customer = await FindOwnedActiveCustomer(userId, id, scopeToRepId);
 
-        if (customer is null)
+        // Visibility (above) and ownership are different questions - an
+        // All/Restricted Rep can see plenty of customers it never created,
+        // and being able to sell to one is not the same as being trusted to
+        // rewrite its contact details. Mirrors ProductService's identical
+        // IsOwnRepCreation boundary; unlike Product there's no narrower
+        // "edit one field" carve-out for the not-own case, since nothing
+        // here maps to Product.CanEditStock - it's full edit or nothing.
+        if (customer is null || !IsOwnRepCreation(customer, scopeToRepId))
         {
             throw new NotFoundException(nameof(Customer), id);
         }
@@ -157,6 +164,23 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
         if (customer is null || !await IsVisibleToRepAsync(customer, scopeToRepId)) return null;
         return customer;
     }
+
+    // Edit needs the stricter "did this Rep create it" check, not the
+    // broader read-visibility one above - a Restricted Rep may be able to
+    // see a customer via a RepCustomerAccess grant, or an All Rep the whole
+    // book, without having created it, and must never be able to rewrite
+    // someone else's customer. Delete is stricter still - see
+    // CustomersController's [Authorize(Roles = "SalesRep")] on Delete, which
+    // blocks it for a Rep even on a customer it created itself, since a
+    // customer's statement/debt view degrades the moment it's archived (see
+    // CustomerService.PermanentDeleteAsync's related cascade concern) and
+    // that's not a call a sub-account should get to make alone.
+    // internal, not private - SyncService.PushCustomerAsync calls this too
+    // (mirrors OrderService.ValidateCashDiscount/OrderItemsMatch, the same
+    // established shared-helper pattern for this codebase's REST-vs-sync
+    // pair of write paths).
+    internal static bool IsOwnRepCreation(Customer customer, Guid? scopeToRepId) =>
+        scopeToRepId is null || customer.CreatedByRepId == scopeToRepId;
 
     // Null scopeToRepId (the owner) never filters. See the CustomerAccessMode
     // rundown above FindOwnedActiveCustomer for what each mode means.

@@ -22,6 +22,29 @@ public class JwtTokenProviderService(
     IRepAuthService repAuthService,
     ISubAdminAuthService subAdminAuthService) : IJwtTokenProviderService
 {
+    // How long a just-rotated refresh token still gets a fresh pair instead
+    // of a rejection. Exists for one specific race: IssueRefreshTokenAsync
+    // commits the rotation before the HTTP response carrying the new token
+    // is even built, so if that response never reaches the client (a
+    // timeout - ApiClient's 30s budget sits close to Render's own
+    // documented ~24-50s cold-start wake), the client's only move is to
+    // retry with the token it still has on disk, which the server has
+    // already invalidated a moment earlier. The client cannot tell "my
+    // first attempt is still in flight" apart from "it already succeeded
+    // and I never heard back" - from its side those look identical. Without
+    // this window, that legitimate retry was rejected exactly like a truly
+    // dead token, and the frontend's own bug (fixed alongside this) turned
+    // that into a silent, unexplained logout instead of a visible one.
+    // Shared by RepAuthService and SubAdminAuthService, which mirror this
+    // exact rotation shape for their own sessions.
+    //
+    // Deliberately short: it only ever revives a token that's already been
+    // superseded, never the one currently in active use, so it adds no
+    // meaningful window for a genuinely stolen token - an attacker would
+    // need to have captured it in the same narrow moment the legitimate
+    // device was naturally rotating it anyway.
+    public static readonly TimeSpan RefreshRotationGrace = TimeSpan.FromSeconds(90);
+
     public async Task<JwtTokenResponse> GenerateToken(User user)
     {
         var jwtSettings = configuration.GetSection("JwtSettings");
@@ -92,13 +115,21 @@ public class JwtTokenProviderService(
 
         if (storedToken is null || storedToken.ExpiresOnUtc < DateTime.UtcNow)
         {
-            throw new UnauthorizedException("Invalid or expired refresh token");
+            throw new UnauthorizedException("Invalid or expired refresh token", AccountStatusErrorCodes.SessionExpired);
         }
 
         var status = UserService.ComputeAccountStatus(storedToken.User);
         if (status is "Expired" or "Suspended")
         {
             throw new UnauthorizedException($"This account is {status.ToLowerInvariant()}.", AccountStatusErrorCodes.For(status));
+        }
+
+        // A superseded token gets exactly one more chance to reissue, within
+        // RefreshRotationGrace - past it, it's exactly as dead as any other
+        // invalid token. See the field comment for why this exists.
+        if (storedToken.ReplacedAtUtc is { } replacedAt && replacedAt < DateTime.UtcNow - RefreshRotationGrace)
+        {
+            throw new UnauthorizedException("Invalid or expired refresh token", AccountStatusErrorCodes.SessionExpired);
         }
 
         return await GenerateToken(storedToken.User);
@@ -114,7 +145,35 @@ public class JwtTokenProviderService(
     private async Task<string> IssueRefreshTokenAsync(User user)
     {
         var existingTokens = await dbContext.RefreshTokens.Where(r => r.UserId == user.Id).ToListAsync();
-        dbContext.RefreshTokens.RemoveRange(existingTokens);
+        var now = DateTime.UtcNow;
+
+        foreach (var existing in existingTokens)
+        {
+            // Already past its own grace window - exactly as dead as one
+            // that was never superseded, so delete it here instead of
+            // leaving it to accumulate forever. Piggybacks on the
+            // per-user-scoped query above, which already runs on every
+            // rotation.
+            if (existing.ReplacedAtUtc is { } replacedAt && replacedAt < now - RefreshRotationGrace)
+            {
+                dbContext.RefreshTokens.Remove(existing);
+            }
+            else
+            {
+                // ??=, not =: this loop runs on EVERY rotation for this user,
+                // touching every one of their outstanding rows, not just the
+                // one presented in this particular request. A plain
+                // assignment would push the timestamp forward on unrelated
+                // activity (a second device, a background refresh) every
+                // time it ran - stamping "now" on a row already stamped 85
+                // seconds ago restarts its 90-second clock, so continuous
+                // account activity could keep an old row perpetually inside
+                // its grace window instead of the bounded 90s the field
+                // comment promises. Only the first supersession should ever
+                // set this.
+                existing.ReplacedAtUtc ??= now;
+            }
+        }
 
         var rawToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
 
@@ -126,7 +185,7 @@ public class JwtTokenProviderService(
         {
             Token = HashToken(rawToken),
             UserId = user.Id,
-            ExpiresOnUtc = DateTime.UtcNow.AddDays(7)
+            ExpiresOnUtc = now.AddDays(7)
         };
 
         await dbContext.RefreshTokens.AddAsync(refreshToken);

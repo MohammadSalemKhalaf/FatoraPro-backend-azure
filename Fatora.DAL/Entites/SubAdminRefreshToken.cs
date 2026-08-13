@@ -9,6 +9,11 @@ public class SubAdminRefreshToken
     public int Id { get; set; }
     public required string Token { get; set; }
     public DateTime ExpiresOnUtc { get; set; }
+
+    // See RefreshToken.ReplacedAtUtc - same grace-window reasoning, applied
+    // to a SubAdmin's own refresh token.
+    public DateTime? ReplacedAtUtc { get; set; }
+
     public Guid SubAdminId { get; set; }
     public SubAdmin SubAdmin { get; set; } = null!;
 

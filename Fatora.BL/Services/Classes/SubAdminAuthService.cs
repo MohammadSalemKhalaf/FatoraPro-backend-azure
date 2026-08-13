@@ -49,7 +49,7 @@ public class SubAdminAuthService(IConfiguration configuration, AppDbContext dbCo
 
         if (storedToken.ExpiresOnUtc < DateTime.UtcNow)
         {
-            throw new UnauthorizedException("Invalid or expired refresh token");
+            throw new UnauthorizedException("Invalid or expired refresh token", AccountStatusErrorCodes.SessionExpired);
         }
 
         // IsActive alone isn't enough: a plain logout never sets it false,
@@ -61,6 +61,17 @@ public class SubAdminAuthService(IConfiguration configuration, AppDbContext dbCo
             throw new UnauthorizedException(
                 "This session has ended.",
                 AccountStatusErrorCodes.SubAdminSessionEnded);
+        }
+
+        // A superseded token gets exactly one more chance to reissue, within
+        // JwtTokenProviderService.RefreshRotationGrace - see that field's
+        // comment for why. Checked last, after IsActive/SessionVersion, so a
+        // token that happens to fall in its grace window still correctly
+        // rejects if the Admin ended this session in the meantime.
+        if (storedToken.ReplacedAtUtc is { } replacedAt &&
+            replacedAt < DateTime.UtcNow - JwtTokenProviderService.RefreshRotationGrace)
+        {
+            throw new UnauthorizedException("Invalid or expired refresh token", AccountStatusErrorCodes.SessionExpired);
         }
 
         return await GenerateTokenAsync(storedToken.SubAdmin);
@@ -113,7 +124,27 @@ public class SubAdminAuthService(IConfiguration configuration, AppDbContext dbCo
     private async Task<string> IssueRefreshTokenAsync(SubAdmin subAdmin)
     {
         var existingTokens = await dbContext.SubAdminRefreshTokens.Where(r => r.SubAdminId == subAdmin.Id).ToListAsync();
-        dbContext.SubAdminRefreshTokens.RemoveRange(existingTokens);
+        var now = DateTime.UtcNow;
+
+        // See JwtTokenProviderService.IssueRefreshTokenAsync - same
+        // grace-window-then-cleanup shape, mirrored here for SubAdmin sessions.
+        foreach (var existing in existingTokens)
+        {
+            if (existing.ReplacedAtUtc is { } replacedAt &&
+                replacedAt < now - JwtTokenProviderService.RefreshRotationGrace)
+            {
+                dbContext.SubAdminRefreshTokens.Remove(existing);
+            }
+            else
+            {
+                // ??=, not = - see JwtTokenProviderService.IssueRefreshTokenAsync's
+                // identical comment. A plain assignment here would let
+                // unrelated activity on this SubAdmin's session keep
+                // resetting an old row's clock instead of it expiring 90s
+                // after its own supersession.
+                existing.ReplacedAtUtc ??= now;
+            }
+        }
 
         var rawToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
 
@@ -121,7 +152,7 @@ public class SubAdminAuthService(IConfiguration configuration, AppDbContext dbCo
         {
             Token = HashToken(rawToken),
             SubAdminId = subAdmin.Id,
-            ExpiresOnUtc = DateTime.UtcNow.AddDays(7),
+            ExpiresOnUtc = now.AddDays(7),
             IssuedAtSessionVersion = subAdmin.SessionVersion
         };
 

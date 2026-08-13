@@ -56,7 +56,7 @@ public class RepAuthService(IConfiguration configuration, AppDbContext dbContext
 
         if (storedToken.ExpiresOnUtc < DateTime.UtcNow)
         {
-            throw new UnauthorizedException("Invalid or expired refresh token");
+            throw new UnauthorizedException("Invalid or expired refresh token", AccountStatusErrorCodes.SessionExpired);
         }
 
         // Distinct from a plain expiry: this token is still technically
@@ -92,6 +92,17 @@ public class RepAuthService(IConfiguration configuration, AppDbContext dbContext
             throw new UnauthorizedException(
                 $"This account is {ownerStatus.ToLowerInvariant()}.",
                 AccountStatusErrorCodes.For(ownerStatus));
+        }
+
+        // A superseded token gets exactly one more chance to reissue, within
+        // JwtTokenProviderService.RefreshRotationGrace - see that field's
+        // comment for why. Checked last, after IsActive/SessionVersion, so a
+        // token that happens to fall in its grace window still correctly
+        // rejects if the owner ended this session in the meantime.
+        if (storedToken.ReplacedAtUtc is { } replacedAt &&
+            replacedAt < DateTime.UtcNow - JwtTokenProviderService.RefreshRotationGrace)
+        {
+            throw new UnauthorizedException("Invalid or expired refresh token", AccountStatusErrorCodes.SessionExpired);
         }
 
         return await GenerateTokenAsync(storedToken.Rep);
@@ -162,7 +173,27 @@ public class RepAuthService(IConfiguration configuration, AppDbContext dbContext
     private async Task<string> IssueRefreshTokenAsync(Rep rep)
     {
         var existingTokens = await dbContext.RepRefreshTokens.Where(r => r.RepId == rep.Id).ToListAsync();
-        dbContext.RepRefreshTokens.RemoveRange(existingTokens);
+        var now = DateTime.UtcNow;
+
+        // See JwtTokenProviderService.IssueRefreshTokenAsync - same
+        // grace-window-then-cleanup shape, mirrored here for Rep sessions.
+        foreach (var existing in existingTokens)
+        {
+            if (existing.ReplacedAtUtc is { } replacedAt &&
+                replacedAt < now - JwtTokenProviderService.RefreshRotationGrace)
+            {
+                dbContext.RepRefreshTokens.Remove(existing);
+            }
+            else
+            {
+                // ??=, not = - see JwtTokenProviderService.IssueRefreshTokenAsync's
+                // identical comment. A plain assignment here would let
+                // unrelated activity on this Rep's session keep resetting an
+                // old row's clock instead of it expiring 90s after its own
+                // supersession.
+                existing.ReplacedAtUtc ??= now;
+            }
+        }
 
         var rawToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
 
@@ -170,7 +201,7 @@ public class RepAuthService(IConfiguration configuration, AppDbContext dbContext
         {
             Token = HashToken(rawToken),
             RepId = rep.Id,
-            ExpiresOnUtc = DateTime.UtcNow.AddDays(7),
+            ExpiresOnUtc = now.AddDays(7),
             IssuedAtSessionVersion = rep.SessionVersion
         };
 
