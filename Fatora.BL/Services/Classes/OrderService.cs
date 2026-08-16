@@ -54,6 +54,7 @@ public class OrderService(AppDbContext dbContext) : IOrderService
 
         ValidateCashDiscount(order.OrderItems, request.Discount, request.CashDiscount);
         order.CashDiscount = request.CashDiscount;
+        order.Total = ComputeTotal(order.OrderItems, request.Discount, request.CashDiscount);
 
         foreach (var lineItem in request.Items)
         {
@@ -206,8 +207,12 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         // Validated against newItems directly, not order.Subtotal - assigning to the OrderItems
         // navigation before SaveChanges is what caused the earlier EF change-tracker bug, so it's
         // still only set on the in-memory object after the save below, for the response mapping.
+        // Total is computed from newItems for the exact same reason: order.Subtotal (and therefore
+        // order.Total, were it read here) would still reflect the OLD, about-to-be-replaced item set
+        // until order.OrderItems is reassigned after SaveChangesAsync below.
         ValidateCashDiscount(newItems, request.Discount, request.CashDiscount);
         order.CashDiscount = request.CashDiscount;
+        order.Total = ComputeTotal(newItems, request.Discount, request.CashDiscount);
 
         await dbContext.SaveChangesAsync();
 
@@ -351,11 +356,23 @@ public class OrderService(AppDbContext dbContext) : IOrderService
         return summary;
     }
 
-    internal static void ValidateCashDiscount(List<OrderItem> items, decimal discountPercent, decimal cashDiscount)
+    // Single source of truth for Order.Total's formula - true decimal
+    // precision, no rounding. Shared by every create/edit path (OrderService
+    // and SyncService alike) so none of them can drift from another, and
+    // callers must pass the actual item set being saved (e.g. `newItems`
+    // during an edit) rather than reading order.OrderItems/order.Subtotal,
+    // which reflect the OLD set until SaveChangesAsync commits - see the
+    // callers in CreateAsync/UpdateAsync for the exact reasoning.
+    internal static decimal ComputeTotal(IEnumerable<OrderItem> items, decimal discountPercent, decimal cashDiscount)
     {
         var subtotal = items.Sum(i => i.TotalPrice);
         var discountAmount = subtotal * (discountPercent / 100m);
-        var payableAfterPercentageDiscount = subtotal - discountAmount;
+        return subtotal - discountAmount - cashDiscount;
+    }
+
+    internal static void ValidateCashDiscount(List<OrderItem> items, decimal discountPercent, decimal cashDiscount)
+    {
+        var payableAfterPercentageDiscount = ComputeTotal(items, discountPercent, cashDiscount: 0);
 
         if (cashDiscount > payableAfterPercentageDiscount)
         {

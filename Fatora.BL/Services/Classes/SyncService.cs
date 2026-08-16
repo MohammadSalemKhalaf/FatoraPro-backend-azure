@@ -331,6 +331,7 @@ public class SyncService(AppDbContext dbContext) : ISyncService
 
                 OrderService.ValidateCashDiscount(order.OrderItems, item.Discount, item.CashDiscount);
                 order.CashDiscount = item.CashDiscount;
+                order.Total = OrderService.ComputeTotal(order.OrderItems, item.Discount, item.CashDiscount);
 
                 foreach (var lineItem in item.Items)
                 {
@@ -516,6 +517,11 @@ public class SyncService(AppDbContext dbContext) : ISyncService
             existing.PaidAmount = item.PaidAmount;
             existing.CoveredByReceipt = item.CoveredByReceipt;
             existing.UpdatedAt = item.UpdatedAt;
+            // From newItems, not existing.Subtotal - existing.OrderItems is
+            // RemoveRange'd/AddRange'd via the DbSet directly below and is
+            // never reassigned to newItems in this method, so existing.Subtotal
+            // would still reflect the OLD item set at this point.
+            existing.Total = OrderService.ComputeTotal(newItems, item.Discount, item.CashDiscount);
             // Latitude/Longitude deliberately untouched here - location is
             // "where was I when I made this," captured once at true
             // creation time (see the create branch above), never

@@ -5,6 +5,7 @@ using Fatora.BL.Services.Abstractions;
 using Fatora.DAL.Data;
 using Fatora.DAL.Entites;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
 using System.Text;
 
 namespace Fatora.BL.Services.Classes;
@@ -52,7 +53,12 @@ public class AnnualInventoryService(AppDbContext dbContext, IPasswordHasherServi
 
         var totalSales = orders.Where(o => !o.IsReturned).Sum(o => o.Total);
         var totalCollected = orders.Sum(o => o.PaidAmount);
-        var totalRemainingDebt = orders.Sum(o => o.RemainingBalance);
+        // EffectiveRemaining (not raw RemainingBalance) so a receipt-covered
+        // write-off reads as settled here too - matching the Invoices
+        // section's own grand total (BuildCsv) and the Debts section, which
+        // already both use it. Summing raw RemainingBalance here made this
+        // one figure disagree with the rest of the same report.
+        var totalRemainingDebt = orders.Sum(o => EffectiveRemaining(o));
 
         var csvContent = BuildCsv(totalSales, totalCollected, totalRemainingDebt, orders, customers, products, receipts);
         var customerSummaries = BuildCustomerSummaries(orders);
@@ -276,6 +282,11 @@ public class AnnualInventoryService(AppDbContext dbContext, IPasswordHasherServi
     // exactly (same section headers/columns/quoting), so a downloaded
     // annual archive reads consistently with the everyday export feature
     // instead of being its own, unfamiliar format.
+    //
+    // Section order: Summary, Returned Invoices, Invoices, Customers,
+    // Customer Debts, Items - Debts sits right after Customers rather than
+    // between Invoices and Customers; a pure reordering, AppendDebtsSection's
+    // own computation is unchanged.
     private static string BuildCsv(
         decimal totalSales, decimal totalCollected, decimal totalRemainingDebt,
         List<Order> orders, List<Customer> customers, List<Product> products, List<Receipt> receipts)
@@ -283,68 +294,86 @@ public class AnnualInventoryService(AppDbContext dbContext, IPasswordHasherServi
         var sb = new StringBuilder();
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
-        AppendRow(sb, "ملخص الجرد السنوي");
-        AppendRow(sb, "إجمالي المبيعات", "إجمالي المقبوض", "إجمالي الدين المتبقي");
-        AppendRow(sb, totalSales.ToString("F2"), totalCollected.ToString("F2"), totalRemainingDebt.ToString("F2"));
-        sb.Append("\r\n");
-
         var returned = orders.Where(o => o.IsReturned).ToList();
         var active = orders.Where(o => !o.IsReturned).ToList();
+
+        var returnedTotal = returned.Sum(o => o.Total);
+        // totalSales (the parameter) already IS the net figure - it's
+        // Order.Total, which already excludes returns and is already net of
+        // discounts. grossSales adds the one figure that isn't available
+        // anywhere else: the pre-discount subtotal, so the summary can show
+        // both ends without touching totalSales' own value or its meaning
+        // elsewhere (it's also persisted on AnnualInventoryArchive).
+        var grossSales = active.Sum(o => o.Subtotal);
+        var discountTotal = active.Sum(o => o.DiscountAmount);
+        var stockValue = products.Sum(p => (p.StockQuantity ?? 0) * p.PurchasePrice);
+
+        AppendRow(sb, "ملخص الجرد السنوي");
+        AppendRow(sb, "إجمالي المبيعات", "إجمالي المقبوض", "إجمالي الدين المتبقي", "الخصومات",
+            "المرتجعات", "صافي المبيعات", "عدد الفواتير", "عدد العملاء", "عدد الأصناف", "قيمة المخزون");
+        AppendRow(sb, FormatMoney(grossSales), FormatMoney(totalCollected), FormatMoney(totalRemainingDebt),
+            FormatMoney(discountTotal), FormatMoney(returnedTotal), FormatMoney(totalSales),
+            FormatCount(active.Count), FormatCount(customers.Count), FormatCount(products.Count),
+            FormatMoney(stockValue));
+        sb.Append("\r\n");
 
         if (returned.Count > 0)
         {
             AppendRow(sb, "الفواتير المرتجعة");
             AppendRow(sb, "رقم الفاتورة", "العميل", "رقم الهاتف", "تاريخ الإصدار", "القيمة الأصلية");
-            decimal returnedTotal = 0;
             foreach (var order in returned)
             {
-                returnedTotal += order.Total;
-                AppendRow(sb, order.InvoiceNumber, order.Customer.Name, order.Customer.PhoneNumber ?? "",
-                    order.CreatedAt.ToString("yyyy-MM-dd"), order.Total.ToString("F2"));
+                AppendRow(sb, order.InvoiceNumber, order.Customer.Name, ExcelText(order.Customer.PhoneNumber),
+                    FormatDate(order.CreatedAt), FormatMoney(order.Total));
             }
-            AppendRow(sb, "الإجمالي العام", "", "", "", returnedTotal.ToString("F2"));
+            AppendRow(sb, "عدد المرتجعات", FormatCount(returned.Count));
+            AppendRow(sb, "الإجمالي العام", "", "", "", FormatMoney(returnedTotal));
             sb.Append("\r\n");
         }
 
         AppendRow(sb, "الفواتير");
         AppendRow(sb, "رقم الفاتورة", "العميل", "رقم الهاتف", "تاريخ الإصدار", "تاريخ الاستحقاق",
             "الحالة", "الخصم", "الإجمالي", "المدفوع", "المتبقي");
-        decimal discountTotal = 0, amountTotal = 0, paidTotal = 0, remainingTotal = 0;
+        decimal paidTotal = 0, remainingTotal = 0;
         foreach (var order in active)
         {
             var remaining = EffectiveRemaining(order);
-            discountTotal += order.Discount;
-            amountTotal += order.Total;
             paidTotal += order.PaidAmount;
             remainingTotal += remaining;
-            AppendRow(sb, order.InvoiceNumber, order.Customer.Name, order.Customer.PhoneNumber ?? "",
-                order.CreatedAt.ToString("yyyy-MM-dd"),
-                order.DueDate?.ToString("yyyy-MM-dd") ?? "",
+            AppendRow(sb, order.InvoiceNumber, order.Customer.Name, ExcelText(order.Customer.PhoneNumber),
+                FormatDate(order.CreatedAt),
+                order.DueDate is { } dueDate ? FormatDate(dueDate) : "",
                 StatusLabel(order, today),
-                order.Discount.ToString("F2"), order.Total.ToString("F2"),
-                order.PaidAmount.ToString("F2"), remaining.ToString("F2"));
+                FormatMoney(order.DiscountAmount), FormatMoney(order.Total),
+                FormatMoney(order.PaidAmount), FormatMoney(remaining));
         }
-        AppendRow(sb, "الإجمالي العام", "", "", "", "", "", discountTotal.ToString("F2"),
-            amountTotal.ToString("F2"), paidTotal.ToString("F2"), remainingTotal.ToString("F2"));
+        // amountTotal reuses totalSales directly (rather than re-summing
+        // order.Total over `active` again) so this grand total can never
+        // drift from the Summary's own "صافي المبيعات" figure above - both
+        // read the exact same value.
+        AppendRow(sb, "الإجمالي العام", "", "", "", "", "", FormatMoney(discountTotal),
+            FormatMoney(totalSales), FormatMoney(paidTotal), FormatMoney(remainingTotal));
         sb.Append("\r\n");
-
-        AppendDebtsSection(sb, orders, receipts);
 
         AppendRow(sb, "العملاء");
         AppendRow(sb, "الاسم", "اسم المتجر", "رقم الهاتف", "الشارع", "المدينة", "تاريخ الإضافة");
         foreach (var customer in customers)
         {
-            AppendRow(sb, customer.Name, customer.StoreName ?? "", customer.PhoneNumber ?? "",
-                customer.Street ?? "", customer.City ?? "", customer.CreatedAt.ToString("yyyy-MM-dd"));
+            AppendRow(sb, customer.Name, customer.StoreName ?? "", ExcelText(customer.PhoneNumber),
+                customer.Street ?? "", customer.City ?? "", FormatDate(customer.CreatedAt));
         }
         sb.Append("\r\n");
 
+        AppendDebtsSection(sb, orders, receipts);
+
         AppendRow(sb, "الأصناف");
-        AppendRow(sb, "الاسم", "الوصف", "سعر الشراء", "سعر البيع");
+        AppendRow(sb, "الاسم", "الوصف", "سعر الشراء", "سعر البيع", "الكمية الحالية", "قيمة المخزون");
         foreach (var product in products)
         {
+            var quantity = product.StockQuantity ?? 0;
             AppendRow(sb, product.Name, product.Description ?? "",
-                product.PurchasePrice.ToString("F2"), product.SellPrice.ToString("F2"));
+                FormatMoney(product.PurchasePrice), FormatMoney(product.SellPrice),
+                FormatCount(quantity), FormatMoney(quantity * product.PurchasePrice));
         }
 
         return sb.ToString();
@@ -385,11 +414,29 @@ public class AnnualInventoryService(AppDbContext dbContext, IPasswordHasherServi
         foreach (var debt in debts)
         {
             totalDebt += debt.Amount;
-            AppendRow(sb, debt.Name, debt.Phone, debt.UnpaidInvoiceCount.ToString(), debt.Amount.ToString("F2"));
+            AppendRow(sb, debt.Name, ExcelText(debt.Phone), FormatCount(debt.UnpaidInvoiceCount), FormatMoney(debt.Amount));
         }
-        AppendRow(sb, "الإجمالي العام", "", "", totalDebt.ToString("F2"));
+        AppendRow(sb, "الإجمالي العام", "", "", FormatMoney(totalDebt));
         sb.Append("\r\n");
     }
+
+    // Forces Excel to treat a numeric-looking value (a phone number here) as
+    // literal text on open, instead of silently auto-converting it to a
+    // number - which drops a leading zero, or, for a long digit string,
+    // renders it in scientific notation (e.g. "5.99067888E+08"). Plain CSV
+    // double-quoting alone does not stop Excel from doing this; only its own
+    // ="..." text-formula convention does.
+    private static string ExcelText(string? value) =>
+        string.IsNullOrEmpty(value) ? "" : $"=\"{value}\"";
+
+    // "0.###" shows up to 3 fraction digits and trims trailing zeros - a
+    // stored 30.75 prints as "30.75" and 25.00 as "25", never forced to a
+    // fixed 2 decimals that would silently round a true 3-decimal value
+    // (e.g. a discount amount) the moment it's exported.
+    private static string FormatMoney(decimal value) => value.ToString("0.###", CultureInfo.InvariantCulture);
+    private static string FormatCount(int value) => value.ToString(CultureInfo.InvariantCulture);
+    private static string FormatDate(DateTime value) => value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+    private static string FormatDate(DateOnly value) => value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
     private static void AppendRow(StringBuilder sb, params string[] fields)
     {

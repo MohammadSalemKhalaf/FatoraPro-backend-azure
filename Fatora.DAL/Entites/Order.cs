@@ -16,10 +16,17 @@ public class Order : ISyncableEntity
     public decimal Subtotal => OrderItems.Sum(o => o.TotalPrice);
     public decimal DiscountAmount => Subtotal * (Discount / 100m);
 
-    // Rounded to the nearest half-unit (e.g. 746.2 -> 746.0, 746.3 -> 746.5) -
-    // the payable total is always a clean half or whole amount, never odd cents.
-    public decimal Total =>
-        Math.Round((Subtotal - DiscountAmount - CashDiscount) * 2, 0, MidpointRounding.AwayFromZero) / 2;
+    // A real, stored column (not computed) - true decimal precision, no
+    // rounding. Explicitly (re)assigned by OrderService.ComputeTotal at the
+    // exact moments an order is genuinely created or edited
+    // (OrderService.CreateAsync/UpdateAsync, SyncService.PushOrderAsync's
+    // create/edit branches) - never touched by RecordPaymentAsync/
+    // ReturnAsync, which only read it. This is what lets an already-issued
+    // invoice's Total stay frozen forever once set, instead of drifting if
+    // the formula (or, previously, its rounding rule) ever changes -
+    // existing rows keep whatever value the AddOrderStoredTotal migration
+    // backfilled them with under the old half-unit-rounded formula.
+    public decimal Total { get; set; }
     public decimal PaidAmount { get; set; }
 
     // A returned invoice contributes nothing to what the customer still
