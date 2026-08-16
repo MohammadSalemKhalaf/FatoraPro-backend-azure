@@ -25,12 +25,21 @@ public class EmailService(IConfiguration configuration) : IEmailService
             EnableSsl = true,
             Credentials = new NetworkCredential(fromEmail, password),
 
-            // Explicit rather than SmtpClient's 100s default - a slow or
-            // stalled connection to Gmail from the host's network should fail
-            // fast and predictably, not hang for an unbounded, observed-in-
-            // production multi-minute stretch that AdminRecoveryService would
-            // otherwise sit blocked on.
-            Timeout = 15000
+            // Was 15000 - measured live against the production host and it
+            // was consistently hitting that exact ceiling (a ~16s round
+            // trip, timeout included) rather than failing fast, meaning the
+            // Render-to-Gmail SMTP handshake itself is genuinely slower
+            // than 15s here, not rejecting the connection outright. Widened
+            // to give a slow-but-real relay enough room to complete, while
+            // still bounding the original unbounded-multi-minute-hang
+            // problem this Timeout was added to fix in the first place.
+            // If this is STILL timing out at the new ceiling, that's a
+            // different problem this can't fix - it would mean Render is
+            // blocking/throttling outbound SMTP (port 587) rather than the
+            // relay just being slow, and the real fix is switching to an
+            // HTTP-API-based email provider (SendGrid/Resend/Mailgun/
+            // Postmark) instead of raw SMTP.
+            Timeout = 60000
         };
 
         using var message = new MailMessage(fromEmail, to, subject, body);
