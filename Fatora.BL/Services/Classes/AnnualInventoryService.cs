@@ -311,10 +311,10 @@ public class AnnualInventoryService(AppDbContext dbContext, IPasswordHasherServi
         AppendRow(sb, "ملخص الجرد السنوي");
         AppendRow(sb, "إجمالي المبيعات", "إجمالي المقبوض", "إجمالي الدين المتبقي", "الخصومات",
             "المرتجعات", "صافي المبيعات", "عدد الفواتير", "عدد العملاء", "عدد الأصناف", "قيمة المخزون");
-        AppendRow(sb, FormatMoney(grossSales), FormatMoney(totalCollected), FormatMoney(totalRemainingDebt),
-            FormatMoney(discountTotal), FormatMoney(returnedTotal), FormatMoney(totalSales),
+        AppendRow(sb, FormatAggregateMoney(grossSales), FormatAggregateMoney(totalCollected), FormatAggregateMoney(totalRemainingDebt),
+            FormatAggregateMoney(discountTotal), FormatAggregateMoney(returnedTotal), FormatAggregateMoney(totalSales),
             FormatCount(active.Count), FormatCount(customers.Count), FormatCount(products.Count),
-            FormatMoney(stockValue));
+            FormatAggregateMoney(stockValue));
         sb.Append("\r\n");
 
         if (returned.Count > 0)
@@ -327,7 +327,7 @@ public class AnnualInventoryService(AppDbContext dbContext, IPasswordHasherServi
                     FormatDate(order.CreatedAt), FormatMoney(order.Total));
             }
             AppendRow(sb, "عدد المرتجعات", FormatCount(returned.Count));
-            AppendRow(sb, "الإجمالي العام", "", "", "", FormatMoney(returnedTotal));
+            AppendRow(sb, "الإجمالي العام", "", "", "", FormatAggregateMoney(returnedTotal));
             sb.Append("\r\n");
         }
 
@@ -351,8 +351,8 @@ public class AnnualInventoryService(AppDbContext dbContext, IPasswordHasherServi
         // order.Total over `active` again) so this grand total can never
         // drift from the Summary's own "صافي المبيعات" figure above - both
         // read the exact same value.
-        AppendRow(sb, "الإجمالي العام", "", "", "", "", "", FormatMoney(discountTotal),
-            FormatMoney(totalSales), FormatMoney(paidTotal), FormatMoney(remainingTotal));
+        AppendRow(sb, "الإجمالي العام", "", "", "", "", "", FormatAggregateMoney(discountTotal),
+            FormatAggregateMoney(totalSales), FormatAggregateMoney(paidTotal), FormatAggregateMoney(remainingTotal));
         sb.Append("\r\n");
 
         AppendRow(sb, "العملاء");
@@ -414,9 +414,9 @@ public class AnnualInventoryService(AppDbContext dbContext, IPasswordHasherServi
         foreach (var debt in debts)
         {
             totalDebt += debt.Amount;
-            AppendRow(sb, debt.Name, ExcelText(debt.Phone), FormatCount(debt.UnpaidInvoiceCount), FormatMoney(debt.Amount));
+            AppendRow(sb, debt.Name, ExcelText(debt.Phone), FormatCount(debt.UnpaidInvoiceCount), FormatAggregateMoney(debt.Amount));
         }
-        AppendRow(sb, "الإجمالي العام", "", "", FormatMoney(totalDebt));
+        AppendRow(sb, "الإجمالي العام", "", "", FormatAggregateMoney(totalDebt));
         sb.Append("\r\n");
     }
 
@@ -434,6 +434,20 @@ public class AnnualInventoryService(AppDbContext dbContext, IPasswordHasherServi
     // fixed 2 decimals that would silently round a true 3-decimal value
     // (e.g. a discount amount) the moment it's exported.
     private static string FormatMoney(decimal value) => value.ToString("0.###", CultureInfo.InvariantCulture);
+
+    // For an AGGREGATE figure only - a grand total summed across many
+    // invoices/customers (the Summary row, a section's own "الإجمالي العام"
+    // row, a customer's net debt). A single invoice/order's own value must
+    // always go through FormatMoney above, keeping its exact precision -
+    // rounding THAT would be the real, compounding error this app already
+    // spent real effort eliminating. A grand total is different: a
+    // fraction of a unit spread across many invoices is meaningless noise
+    // once summed, and showing it looks broken (e.g. "3877.965"). The
+    // underlying sum itself is still computed from full, unrounded
+    // precision - only this DISPLAYED figure is rounded, never anything
+    // persisted or fed back into further math.
+    private static string FormatAggregateMoney(decimal value) =>
+        Math.Round(value, 0, MidpointRounding.AwayFromZero).ToString("0.###", CultureInfo.InvariantCulture);
     private static string FormatCount(int value) => value.ToString(CultureInfo.InvariantCulture);
     private static string FormatDate(DateTime value) => value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
     private static string FormatDate(DateOnly value) => value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);

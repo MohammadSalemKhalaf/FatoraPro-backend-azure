@@ -6,7 +6,6 @@ using Fatora.DAL.Entites;
 using Fatora.DAL.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
 
 namespace Fatora.BL.Services.Classes;
 
@@ -14,8 +13,7 @@ public class AdminRecoveryService(
     AppDbContext dbContext,
     IPasswordHasherService passwordHasher,
     IEmailService emailService,
-    IConfiguration configuration,
-    ILogger<AdminRecoveryService> logger) : IAdminRecoveryService
+    IConfiguration configuration) : IAdminRecoveryService
 {
     private static readonly TimeSpan OtpLifetime = TimeSpan.FromMinutes(10);
 
@@ -64,39 +62,22 @@ public class AdminRecoveryService(
 
         await dbContext.SaveChangesAsync();
 
-        // Fired, not awaited. The code already exists and is already valid
-        // the moment the save above completes - the caller's request is
-        // meaningfully done at that point, regardless of how long Gmail's
-        // relay takes to accept the message. Awaiting it here tied the HTTP
-        // response, and so the app's loading spinner, to that delivery time,
-        // which was observed hanging for minutes. Best-effort: EmailService
-        // now carries its own timeout, and a delivery failure has nothing
-        // useful to recover into here anyway - the response already reads
-        // "sent" either way, since that's what stays true from the outside.
+        // Awaited deliberately, despite the extra latency: this used to be
+        // fired-and-forgotten so the HTTP response (and so the app's loading
+        // spinner) didn't wait on Gmail's relay, which was once observed
+        // hanging for minutes. That trade-off backfired - a swallowed,
+        // unlogged send failure meant the code just silently never arrived,
+        // with the client still shown "sent" and nothing to retry or debug.
+        // EmailService's own 15s timeout (see its Timeout setting) already
+        // bounds the original worst case to a predictable, tolerable delay,
+        // so awaiting here is now safe: a genuine failure propagates to
+        // GlobalExceptionsHandler, which logs it AND returns a real error
+        // the client actually shows, instead of a false "sent".
         var recoveryEmail = configuration["AdminRecovery:Email"]!;
-        _ = SendResetCodeEmailAsync(recoveryEmail, code);
-    }
-
-    private async Task SendResetCodeEmailAsync(string recoveryEmail, string code)
-    {
-        try
-        {
-            await emailService.SendAsync(
-                recoveryEmail,
-                "Fatora Admin Password Reset Code",
-                $"Your password reset code is: {code}\nThis code expires in 10 minutes and can only be used once.");
-        }
-        catch (Exception ex)
-        {
-            // Not rethrown - see the comment at the call site for why the
-            // caller's request must not fail here. Still logged: a swallowed
-            // exception with no trace at all is exactly what let this OTP
-            // silently stop arriving (an expired SMTP credential, a blocked
-            // outbound port, anything) go completely unnoticed until a real
-            // user reported it.
-            logger.LogError(ex, "Failed to send admin password reset code email to {RecoveryEmail}",
-                recoveryEmail);
-        }
+        await emailService.SendAsync(
+            recoveryEmail,
+            "Fatora Admin Password Reset Code",
+            $"Your password reset code is: {code}\nThis code expires in 10 minutes and can only be used once.");
     }
 
     public async Task ResetPasswordWithOtpAsync(string userName, string otp, string newPassword)
