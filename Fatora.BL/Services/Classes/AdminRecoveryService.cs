@@ -6,6 +6,7 @@ using Fatora.DAL.Entites;
 using Fatora.DAL.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace Fatora.BL.Services.Classes;
 
@@ -13,7 +14,8 @@ public class AdminRecoveryService(
     AppDbContext dbContext,
     IPasswordHasherService passwordHasher,
     IEmailService emailService,
-    IConfiguration configuration) : IAdminRecoveryService
+    IConfiguration configuration,
+    ILogger<AdminRecoveryService> logger) : IAdminRecoveryService
 {
     private static readonly TimeSpan OtpLifetime = TimeSpan.FromMinutes(10);
 
@@ -84,9 +86,16 @@ public class AdminRecoveryService(
                 "Fatora Admin Password Reset Code",
                 $"Your password reset code is: {code}\nThis code expires in 10 minutes and can only be used once.");
         }
-        catch
+        catch (Exception ex)
         {
-            // Swallowed deliberately - see the comment at the call site.
+            // Not rethrown - see the comment at the call site for why the
+            // caller's request must not fail here. Still logged: a swallowed
+            // exception with no trace at all is exactly what let this OTP
+            // silently stop arriving (an expired SMTP credential, a blocked
+            // outbound port, anything) go completely unnoticed until a real
+            // user reported it.
+            logger.LogError(ex, "Failed to send admin password reset code email to {RecoveryEmail}",
+                recoveryEmail);
         }
     }
 
