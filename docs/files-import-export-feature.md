@@ -201,6 +201,33 @@ class _ColumnMap {
 
 Every field read downstream calls `columns.indexOf('Some Header')` and then reads `fields[index]` — never a hardcoded position. A column this template doesn't recognize simply has no lookup performed against it and is ignored; a missing column returns `null` from `indexOf`, which callers treat as "this field wasn't provided" (empty/optional) or, for a *required* column, as grounds to fail validation entirely up front (see section 7).
 
+### Problem C: visually-near-identical letter variants defeat exact-string matching
+
+A header match that requires byte-for-byte string equality breaks silently on a class of real-world spelling that isn't a typo at all: two letters that render almost identically but are different Unicode codepoints. This project's own header language (Arabic) has exactly this trap between تاء مربوطة (`ة`, U+0629) and هاء (`ه`, U+0647) — for example "الكمية" (quantity) vs. "الكميه", or "المدينة" (city) vs. "المدينه". Both spellings are common in real spreadsheets (autocorrect, a different keyboard layout, or simply how a given user was taught to type), both are visually near-identical at a glance, and neither is "wrong" from the user's point of view. But the exact-match `Map<String, int>` lookup shown above is a byte-for-byte hit — a header typed with the "other" variant makes `indexOf` return `null`, which an optional column silently treats as "not provided" (section 7) rather than as an error. This is the worst kind of bug: no exception, no visible error, just every row's value for that column quietly defaulting to empty/zero with nothing in the UI to explain why.
+
+The fix normalizes both the header key and every lookup through the exact same function, so the two variants collapse to one canonical form before the map is ever consulted:
+
+```dart
+// this project's equivalent of data_import_service.dart — _ColumnMap
+class _ColumnMap {
+  _ColumnMap(List<String> headerRow) {
+    for (var i = 0; i < headerRow.length; i++) {
+      _indexByHeader.putIfAbsent(_normalizeHeader(headerRow[i]), () => i);
+    }
+  }
+  final _indexByHeader = <String, int>{};
+
+  int? indexOf(String header) => _indexByHeader[_normalizeHeader(header)];
+
+  static String _normalizeHeader(String header) =>
+      header.trim().replaceAll('ة', 'ه');
+}
+```
+
+Both directions matter: the constant header strings baked into the app's own template (section 1) are run through the exact same normalization as the incoming file's header row, so it doesn't matter which variant either side happens to use — the app's own template could be typed with `ة` and still match a user's file typed with `ه`, or vice versa.
+
+**Generalizable rule**: don't assume "matching by name instead of position" (this section's own headline fix) fully solves header matching. Any language/script with two near-identical characters that native typists routinely use interchangeably needs an explicit normalization pass applied to *both* sides of the comparison — never just "the side you happen to control." Identify these pairs from real user-reported failures rather than guessing every possible variant up front; this one was found because a real quantity column silently read as empty on a real user file, not from a design review.
+
 ### Finding the real header row
 
 The actual algorithm, and — importantly — *why* a naive "search for the row containing the shared name-column header" is insufficient once you support a combined multi-entity file (section 5): if two entity types share one header column (e.g. both a Customers section and a Products section have a "Name" column), searching only for that shared header would lock onto whichever section's header appears *first* in the file — wrong entity, wrong row, for whichever type you're actually trying to import.
@@ -333,6 +360,26 @@ Sheets are read in numeric filename order (`sheet1.xml`, `sheet2.xml`, ...) rath
 Two more OOXML-specific correctness details worth carrying into any hand-rolled `.xlsx` reader:
 - **Sparse rows.** Excel omits a genuinely empty cell from the XML entirely rather than writing an empty `<c>` element — a row with only columns A and C filled has no `<c>` for B at all. Reading cells "in the order they appear in the XML" without checking each cell's own declared reference (`r="C4"`) would shift C's value left into B's position. The reader instead parses each cell's own column letter from its `r` attribute and pads with empty strings up to that column index before appending the value.
 - **Shared strings vs. inline/rich text.** Excel usually stores repeated text values once in a workbook-level `sharedStrings.xml` table and references them by index (`t="s"`, `<v>` holds the index) — but a cell can also hold inline string content directly (`t="inlineStr"`), and any cell where even one character has its own distinct formatting (e.g. partial bolding) gets split into multiple `<r><t>` runs that must be concatenated. Handling only the plain shared-string case silently produces empty cells for anything rich-text-formatted.
+
+### A whole number's cell text isn't always just digits
+
+One more OOXML-specific correctness detail, easy to miss because it only breaks one column type and never the others: Excel serializes **every** numeric cell's `<v>` value the way it would format the number generally, which very often includes a decimal point even for a value the user typed as a plain integer — a cell containing the whole number `39` commonly round-trips through `.xlsx` as the literal text `"39.0"`. A column whose validator uses a lenient numeric parser (this project's price fields use `double.tryParse`, which accepts `"39.0"` without complaint) never notices. A column whose validator uses a strict integer parser notices immediately, and confusingly: `int.tryParse("39.0")` returns `null` — Dart's `int.tryParse` rejects any decimal point outright, full stop — so a plainly-typed, perfectly valid whole number (this project's product Quantity column) gets rejected as invalid on every single `.xlsx` import, while the exact same value pasted into a CSV (where there's no cell-formatting layer to introduce the trailing `.0`) imports fine. The bug is invisible from the CSV path and only ever reproduces from a real `.xlsx` file, which is exactly why it survived testing that only exercised CSV fixtures.
+
+The fix is a small helper that accepts the same syntax `double.tryParse` accepts, but only converts to `int` once it has confirmed nothing was lost in doing so:
+
+```dart
+// this project's equivalent of data_import_service.dart
+int? _parseWholeNumber(String text) {
+  if (text.isEmpty) return 0;
+  final parsed = double.tryParse(text);
+  if (parsed == null || parsed != parsed.truncateToDouble()) return null;
+  return parsed.toInt();
+}
+```
+
+This still correctly rejects a genuine fraction (`"39.5"` truncates to `39.0`, which is not equal to `39.5`, so it returns `null` — exactly what `int.tryParse` would have done). The fix isn't "be more lenient about what counts as a valid quantity" — it's "recognize that the *text encoding* of a valid whole number can legitimately contain a decimal point when it came from a spreadsheet cell, independent of what value it actually represents."
+
+**Generalizable rule**: never assume a numeric-looking import column can safely use a strict integer parser just because the field is conceptually an integer (a quantity, a count, an ID). If the value can ever arrive via a spreadsheet file format rather than typed-by-hand CSV text, parse leniently as a floating-point number first and check whole-number-ness explicitly, converting to `int` only as the very last step. Test this specifically against a real `.xlsx` fixture, not just a CSV fixture with the same-looking numbers — the two formats do not serialize numbers identically, and a bug here is completely invisible from the CSV path alone.
 
 ---
 
