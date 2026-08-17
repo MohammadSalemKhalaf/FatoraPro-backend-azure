@@ -5,6 +5,7 @@ using Fatora.BL.Services.Classes;
 using Fatora.DAL.Data;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using System.Security.Claims;
 
 namespace Fatora.API.Filters;
@@ -12,7 +13,10 @@ namespace Fatora.API.Filters;
 // Runs on every authenticated request, not just login/refresh - an expired or suspended
 // SalesRep is locked out immediately, on whatever call they make next, not only at their
 // next sign-in. Admins are exempt: they don't have a subscription concept.
-public sealed class AccountStatusFilter(AppDbContext dbContext, IRepAuthService repAuthService) : IAsyncAuthorizationFilter
+public sealed class AccountStatusFilter(
+    AppDbContext dbContext,
+    IRepAuthService repAuthService,
+    ILogger<AccountStatusFilter> logger) : IAsyncAuthorizationFilter
 {
     public async Task OnAuthorizationAsync(AuthorizationFilterContext context)
     {
@@ -113,6 +117,22 @@ public sealed class AccountStatusFilter(AppDbContext dbContext, IRepAuthService 
         if (user is null)
         {
             return;
+        }
+
+        // Rejects this device the instant a newer login has superseded it
+        // (see LoginService.Login bumping User.SessionVersion) - same
+        // "sessionVersion" claim/mismatch pattern as the Rep/SubAdmin
+        // branches above, enforcing one signed-in device at a time for the
+        // owner/SalesRep account.
+        var userTokenSessionVersion = int.Parse(httpContext.User.FindFirstValue("sessionVersion") ?? "0");
+        if (userTokenSessionVersion != user.SessionVersion)
+        {
+            logger.LogInformation(
+                "Request rejected - session superseded. AccountId: {AccountId}, TokenSessionVersion: {TokenSessionVersion}, CurrentSessionVersion: {CurrentSessionVersion}",
+                user.Id,
+                userTokenSessionVersion,
+                user.SessionVersion);
+            throw new ForbiddenException("This session has ended.", AccountStatusErrorCodes.SessionExpired);
         }
 
         var status = UserService.ComputeAccountStatus(user);

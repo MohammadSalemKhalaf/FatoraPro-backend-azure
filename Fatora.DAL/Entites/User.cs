@@ -84,6 +84,17 @@ public class User
     public SubAdmin? ManagedBySubAdmin { get; set; }
     public DateTime CreatedAt { get; set; }
 
+    // Bumped on every fresh login (see LoginService.Login) - any
+    // access/refresh token issued before the bump embeds the OLD value, so
+    // AccountStatusFilter/JwtTokenProviderService.RefreshTokenAsync reject
+    // it as AccountStatusErrorCodes.SessionExpired the next time that
+    // now-superseded device makes a request. Mirrors Rep.SessionVersion/
+    // SubAdmin.SessionVersion exactly, except theirs is bumped only by an
+    // explicit owner action (logout/deactivate) - this one is bumped by
+    // login itself, since an owner/SalesRep account is only ever meant to
+    // have one device signed in at a time.
+    public int SessionVersion { get; set; } = 0;
+
 
     public List<Product> Items { get; set; } = new List<Product>();
     public List<Order> Orders { get; set; } = new List<Order>();

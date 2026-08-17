@@ -22,4 +22,12 @@ public class RefreshToken
 
     public Guid UserId { get; set; }
     public User User { get; set; }
+
+    // Snapshot of User.SessionVersion at the moment this refresh token was
+    // issued - mirrors RepRefreshToken.IssuedAtSessionVersion/
+    // SubAdminRefreshToken.IssuedAtSessionVersion exactly. Lets
+    // JwtTokenProviderService.RefreshTokenAsync reject a superseded
+    // device's refresh attempt even if its access token hasn't naturally
+    // expired yet.
+    public int IssuedAtSessionVersion { get; set; }
 }

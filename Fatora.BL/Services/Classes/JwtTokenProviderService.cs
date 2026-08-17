@@ -13,6 +13,7 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using Fatora.BL.Exceptions;
+using Microsoft.Extensions.Logging;
 
 namespace Fatora.BL.Services.Classes;
 
@@ -20,7 +21,8 @@ public class JwtTokenProviderService(
     IConfiguration configuration,
     AppDbContext dbContext,
     IRepAuthService repAuthService,
-    ISubAdminAuthService subAdminAuthService) : IJwtTokenProviderService
+    ISubAdminAuthService subAdminAuthService,
+    ILogger<JwtTokenProviderService> logger) : IJwtTokenProviderService
 {
     // How long a just-rotated refresh token still gets a fresh pair instead
     // of a rejection. Exists for one specific race: IssueRefreshTokenAsync
@@ -58,6 +60,11 @@ public class JwtTokenProviderService(
         {
            new Claim(JwtRegisteredClaimNames.Sub,user.Id.ToString()),
            new Claim(ClaimTypes.Role,user.Role.ToString()),
+           // Same "sessionVersion" claim shape Rep/SubAdmin tokens already
+           // carry - see User.SessionVersion and AccountStatusFilter's
+           // User branch, which rejects a token whose embedded value no
+           // longer matches the account's current one.
+           new Claim("sessionVersion", user.SessionVersion.ToString()),
         };
 
         var descriptor = new SecurityTokenDescriptor()
@@ -124,6 +131,22 @@ public class JwtTokenProviderService(
             throw new UnauthorizedException($"This account is {status.ToLowerInvariant()}.", AccountStatusErrorCodes.For(status));
         }
 
+        // Rejects a device whose session has been superseded by a newer
+        // login on this same account (see LoginService.Login bumping
+        // User.SessionVersion). Unlike the ReplacedAtUtc grace window
+        // below - which only ever protects a legitimate retry of this SAME
+        // session's own rotation - there is no grace period here: a
+        // different, newer session is now the account's only valid one.
+        if (storedToken.IssuedAtSessionVersion != storedToken.User.SessionVersion)
+        {
+            logger.LogInformation(
+                "Refresh rejected - session superseded. AccountId: {AccountId}, TokenSessionVersion: {TokenSessionVersion}, CurrentSessionVersion: {CurrentSessionVersion}",
+                storedToken.UserId,
+                storedToken.IssuedAtSessionVersion,
+                storedToken.User.SessionVersion);
+            throw new UnauthorizedException("Invalid or expired refresh token", AccountStatusErrorCodes.SessionExpired);
+        }
+
         // A superseded token gets exactly one more chance to reissue, within
         // RefreshRotationGrace - past it, it's exactly as dead as any other
         // invalid token. See the field comment for why this exists.
@@ -185,7 +208,8 @@ public class JwtTokenProviderService(
         {
             Token = HashToken(rawToken),
             UserId = user.Id,
-            ExpiresOnUtc = now.AddDays(7)
+            ExpiresOnUtc = now.AddDays(7),
+            IssuedAtSessionVersion = user.SessionVersion
         };
 
         await dbContext.RefreshTokens.AddAsync(refreshToken);
