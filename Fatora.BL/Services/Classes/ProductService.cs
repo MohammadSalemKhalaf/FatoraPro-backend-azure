@@ -235,6 +235,21 @@ public class ProductService(AppDbContext dbContext) : IProductService
             throw new NotFoundException(nameof(Product), id);
         }
 
+        // OrderItems.ProductId -> Products is configured to cascade (see
+        // FK_OrderItems_Products_ProductId) - the same class of risk
+        // CustomerService.PermanentDeleteAsync already guards against for
+        // Orders/Receipts. An unconditional Remove here would silently
+        // take every past invoice's line item for this product with it.
+        // Archiving (DeleteAsync) is the supported way to retire a
+        // product that has ever actually been sold; a permanent delete
+        // stays available only for one that never traded.
+        var hasHistory = await dbContext.OrderItems.AnyAsync(oi => oi.ProductId == id);
+
+        if (hasHistory)
+        {
+            throw new ConflictException("لا يمكن حذف صنف له فواتير سابقة نهائيًا - اجعله غير متوفر بدلًا من ذلك.");
+        }
+
         dbContext.Products.Remove(product);
         await dbContext.SaveChangesAsync();
     }
