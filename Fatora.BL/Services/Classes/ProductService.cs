@@ -235,6 +235,26 @@ public class ProductService(AppDbContext dbContext) : IProductService
             throw new NotFoundException(nameof(Product), id);
         }
 
+        // OrderItem's FK to Product cascades (see ItemConfiguration), so this
+        // Remove would take every invoice line that ever sold this product with
+        // it - the invoice keeps its stored Total but silently loses the items
+        // it was made of, which is the one thing an already-issued invoice must
+        // never do. Same rule CustomerService.PermanentDeleteAsync already
+        // enforces for Orders/Receipts: trading history is never destroyable as
+        // a side effect of tidying up the catalogue. DeleteAsync (IsActive =
+        // false) is the supported way to retire a product that has sold, and
+        // the Flutter client falls back to exactly that on this 409.
+        var hasSalesHistory = await dbContext.OrderItems.AnyAsync(i => i.ProductId == id);
+
+        if (hasSalesHistory)
+        {
+            // No trailing "اجعله غير متوفر بدلًا من ذلك" here: this message is
+            // shown verbatim by the client, which already appends what it did
+            // instead ("تم جعل الصنف غير متوفر بدلاً من ذلك") - see
+            // ItemsPage._makeUnavailable's fallbackReason.
+            throw new ConflictException("لا يمكن حذف صنف مستخدم في فواتير سابقة نهائيًا.");
+        }
+
         dbContext.Products.Remove(product);
         await dbContext.SaveChangesAsync();
     }
