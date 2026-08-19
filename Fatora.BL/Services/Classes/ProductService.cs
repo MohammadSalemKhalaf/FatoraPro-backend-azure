@@ -235,19 +235,24 @@ public class ProductService(AppDbContext dbContext) : IProductService
             throw new NotFoundException(nameof(Product), id);
         }
 
-        // OrderItems.ProductId -> Products is configured to cascade (see
-        // FK_OrderItems_Products_ProductId) - the same class of risk
-        // CustomerService.PermanentDeleteAsync already guards against for
-        // Orders/Receipts. An unconditional Remove here would silently
-        // take every past invoice's line item for this product with it.
-        // Archiving (DeleteAsync) is the supported way to retire a
-        // product that has ever actually been sold; a permanent delete
-        // stays available only for one that never traded.
-        var hasHistory = await dbContext.OrderItems.AnyAsync(oi => oi.ProductId == id);
+        // OrderItem's FK to Product cascades (see ItemConfiguration), so this
+        // Remove would take every invoice line that ever sold this product with
+        // it - the invoice keeps its stored Total but silently loses the items
+        // it was made of, which is the one thing an already-issued invoice must
+        // never do. Same rule CustomerService.PermanentDeleteAsync already
+        // enforces for Orders/Receipts: trading history is never destroyable as
+        // a side effect of tidying up the catalogue. DeleteAsync (IsActive =
+        // false) is the supported way to retire a product that has sold, and
+        // the Flutter client falls back to exactly that on this 409.
+        var hasSalesHistory = await dbContext.OrderItems.AnyAsync(i => i.ProductId == id);
 
-        if (hasHistory)
+        if (hasSalesHistory)
         {
-            throw new ConflictException("لا يمكن حذف صنف له فواتير سابقة نهائيًا - اجعله غير متوفر بدلًا من ذلك.");
+            // No trailing "اجعله غير متوفر بدلًا من ذلك" here: this message is
+            // shown verbatim by the client, which already appends what it did
+            // instead ("تم جعل الصنف غير متوفر بدلاً من ذلك") - see
+            // ItemsPage._makeUnavailable's fallbackReason.
+            throw new ConflictException("لا يمكن حذف صنف مستخدم في فواتير سابقة نهائيًا.");
         }
 
         dbContext.Products.Remove(product);
