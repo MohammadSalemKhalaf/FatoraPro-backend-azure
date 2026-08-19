@@ -13,6 +13,11 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 COPY --from=build /app .
 
-# Render (and most PaaS hosts) assign the listen port at runtime via $PORT -
-# ASPNETCORE_URLS has to be set from it at container start, not baked in at build time.
-ENTRYPOINT ["sh", "-c", "ASPNETCORE_URLS=http://+:$PORT exec dotnet Fatora.API.dll"]
+# Azure App Service for Linux (Custom Container) does not inject a $PORT
+# env var the way Render does - it instead expects the container to listen
+# on a fixed, known port, which the WEBSITES_PORT App Service setting (set
+# in the Portal, not here) tells the platform's front end to route to. 8080
+# baked in at build time, no shell wrapper needed to resolve it at runtime.
+ENV ASPNETCORE_URLS=http://+:8080
+EXPOSE 8080
+ENTRYPOINT ["dotnet", "Fatora.API.dll"]
